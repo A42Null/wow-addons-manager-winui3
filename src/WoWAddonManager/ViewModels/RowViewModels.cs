@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using WoWAddonManager.Models;
+using WoWAddonManager.Services.Sources;
 
 namespace WoWAddonManager.ViewModels;
 
