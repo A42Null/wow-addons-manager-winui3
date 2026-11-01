@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using Microsoft.Win32;
+using WoWAddonManager.Models;
 
 namespace WoWAddonManager.Services;
 

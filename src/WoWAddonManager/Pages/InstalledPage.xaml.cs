@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
+using WoWAddonManager.Models;
 using WoWAddonManager.Services;
 using WoWAddonManager.ViewModels;
 
