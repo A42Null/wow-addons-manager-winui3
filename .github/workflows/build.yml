@@ -72,4 +72,4 @@ jobs:
       - name: Create release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "${GITHUB_REF_NAME}" "WoWAddonManager-win-x64.zip" --title "WoWAddonManager ${GITHUB_REF_NAME}" --generate-notes
+        run: gh release create "${GITHUB_REF_NAME}" "WoWAddonManager-win-x64.zip" --repo "${{ github.repository }}" --title "WoWAddonManager ${GITHUB_REF_NAME}" --generate-notes
