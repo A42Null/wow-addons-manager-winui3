@@ -41,9 +41,8 @@
                         <StackPanel Grid.Column="0" Spacing="2">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <TextBlock Text="{x:Bind Title}" FontSize="15" FontWeight="SemiBold" />
-                                <InfoBadge x:Name="Badge" Visibility="{x:Bind HasUpdateVisibility, Mode=OneWay}"
-                                           Style="{ThemeResource AttentionValueInfoBadgeStyle}"
-                                           Value="1" IsDot="True" />
+                                <InfoBadge Visibility="{x:Bind HasUpdateVisibility, Mode=OneWay}"
+                                           Style="{ThemeResource AttentionDotInfoBadgeStyle}" />
                             </StackPanel>
                             <TextBlock Text="{x:Bind FolderName}"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
