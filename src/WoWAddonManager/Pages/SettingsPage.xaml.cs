@@ -28,13 +28,25 @@ public sealed partial class SettingsPage : Page
         SelectByTag(NavPosCombo, cfg.NavPosition);
     }
 
-    private static void SelectByTag(Selector selector, string? tag)
+    private static void SelectByTag(RadioButtons radio, string? tag)
     {
-        foreach (var item in selector.Items)
+        for (int i = 0; i < radio.Items.Count; i++)
+        {
+            if ((radio.Items[i] as FrameworkElement)?.Tag?.ToString() == tag)
+            {
+                radio.SelectedIndex = i;
+                return;
+            }
+        }
+    }
+
+    private static void SelectByTag(ComboBox combo, string? tag)
+    {
+        foreach (var item in combo.Items)
         {
             if ((item as FrameworkElement)?.Tag?.ToString() == tag)
             {
-                selector.SelectedItem = item;
+                combo.SelectedItem = item;
                 return;
             }
         }
