@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="WoWAddonManager.Pages.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollViewer Padding="24,16,24,16">
+        <StackPanel MaxWidth="760" HorizontalAlignment="Left" Spacing="16">
+
+            <TextBlock Text="设置" FontSize="24" FontWeight="SemiBold" />
+
+            <!-- 魔兽世界目录 -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="魔兽世界目录" FontSize="16" FontWeight="SemiBold" />
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="WowRootBox" PlaceholderText="例如 C:\Program Files (x86)\World of Warcraft" />
+                        <Button Grid.Column="1" Content="自动检测" Click="OnDetectClick" />
+                        <Button Grid.Column="2" Content="选择文件夹…" Click="OnPickFolderClick" />
+                    </Grid>
+                    <TextBlock Text="客户端版本" />
+                    <ComboBox x:Name="FlavorCombo" Width="320" DisplayMemberPath="DisplayName"
+                              SelectedValuePath="Folder" SelectionChanged="OnFlavorChanged" />
+                    <TextBlock x:Name="AddOnsPathText" IsTextSelectionEnabled="True"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"
+                               Text="插件将安装到：—" />
+                </StackPanel>
+            </Border>
+
+            <!-- CurseForge API -->
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="CurseForge API Key（可选）" FontSize="16" FontWeight="SemiBold" />
+                    <PasswordBox x:Name="ApiKeyBox" PasswordRevealMode="Peek"
+                                 PlaceholderText="粘贴你的 API Key" />
+                    <TextBlock TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                        官方 API 需要免费 API Key：
+                        <Hyperlink NavigateUri="https://console.curseforge.com/#/api-keys/registration">
+                            点击申请（console.curseforge.com）
+                        </Hyperlink>
+                        。填写后走官方稳定接口；留空则尝试社区匿名接口（无需 Key，但可能被限流或不稳定）。
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="保存设置" Style="{ThemeResource AccentButtonStyle}" Click="OnSaveClick" />
+                <Button Content="打开插件目录" Click="OnOpenAddOnsClick" />
+            </StackPanel>
+
+            <InfoBar x:Name="SaveInfo" IsOpen="False" />
+
+        </StackPanel>
+    </ScrollViewer>
+</Page>

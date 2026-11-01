@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="WoWAddonManager.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:WoWAddonManager.Pages"
+    Title="魔兽世界插件管理器">
+
+    <Grid>
+        <NavigationView x:Name="NavView"
+                        IsBackButtonVisible="Collapsed"
+                        IsSettingsVisible="False"
+                        PaneDisplayMode="Left"
+                        OpenPaneLength="200"
+                        SelectionChanged="NavView_SelectionChanged">
+            <NavigationView.MenuItems>
+                <NavigationViewItem Content="已安装插件" Tag="installed" Icon="Home" />
+                <NavigationViewItem Content="浏览 CurseForge" Tag="browse">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE721;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="设置" Tag="settings">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE713;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
+
+            <Grid Padding="0">
+                <Frame x:Name="ContentFrame" />
+            </Grid>
+        </NavigationView>
+    </Grid>
+</Window>

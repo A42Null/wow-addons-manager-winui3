@@ -1,0 +1,22 @@
+# CNB 云原生构建配置
+# 说明：CNB Runner 为 Linux 环境，WinUI3 的 XAML 编译必须在 Windows 上执行，
+# 因此真正的打包构建放在 GitHub Actions（windows-latest）。
+# 本流水线负责把代码镜像推送到 GitHub 仓库，推送后自动触发 Actions 构建。
+# 需要在 CNB 仓库「环境变量/密钥」中配置 GITHUB_TOKEN（对目标仓库有 repo 权限）。
+
+main:
+  push:
+    - name: mirror-push-to-github
+      stages:
+        - name: 同步到 GitHub（触发 Actions 云构建）
+          script: |
+            if [ -z "$GITHUB_TOKEN" ]; then
+              echo "未配置 GITHUB_TOKEN 密钥，跳过镜像推送。请在 CNB 仓库设置中配置。"
+              exit 0
+            fi
+            git push --force "https://x-access-token:${GITHUB_TOKEN}@github.com/A42Null/wow-addons-manager-winui3.git" "HEAD:main"
+
+$:
+  vscode:
+    - docker:
+        image: tencentos/server
