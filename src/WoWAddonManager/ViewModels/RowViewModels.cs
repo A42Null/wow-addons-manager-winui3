@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using WoWAddonManager.Models;
 
 namespace WoWAddonManager.ViewModels;
