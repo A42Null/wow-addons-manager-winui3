@@ -14,7 +14,7 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Spacing="4">
-            <TextBlock Text="浏览 CurseForge" FontSize="24" FontWeight="SemiBold" />
+            <TextBlock Text="浏览插件" FontSize="24" FontWeight="SemiBold" />
             <TextBlock Text="搜索并安装魔兽世界插件（客户端版本跟随「设置」中当前选择的版本）"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
         </StackPanel>
@@ -22,26 +22,34 @@
         <!-- 搜索栏 -->
         <Grid Grid.Row="1" Margin="0,12,0,8" ColumnSpacing="8">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <TextBox x:Name="SearchBox" PlaceholderText="输入插件名，如：Deadly Boss Mods"
+            <ComboBox x:Name="SourceCombo" Width="150" SelectedIndex="0"
+                      SelectionChanged="OnSourceChanged" />
+
+            <TextBox x:Name="SearchBox" Grid.Column="1" PlaceholderText="输入插件名，如：DBM / WeakAuras"
                      KeyDown="OnSearchBoxKeyDown" />
 
-            <ComboBox x:Name="CategoryCombo" Grid.Column="1" Width="200"
+            <ComboBox x:Name="VersionCombo" Grid.Column="2" Width="170" Visibility="Collapsed"
+                      SelectionChanged="OnVersionChanged" />
+
+            <ComboBox x:Name="CategoryCombo" Grid.Column="3" Width="200"
                       DisplayMemberPath="Name" SelectionChanged="OnCategoryChanged" />
 
-            <ComboBox x:Name="SortCombo" Grid.Column="2" Width="130" SelectedIndex="0"
+            <ComboBox x:Name="SortCombo" Grid.Column="4" Width="130" SelectedIndex="0"
                       SelectionChanged="OnSortChanged">
                 <ComboBoxItem Content="最多下载" Tag="6" />
                 <ComboBoxItem Content="最热门" Tag="2" />
                 <ComboBoxItem Content="最近更新" Tag="3" />
             </ComboBox>
 
-            <Button x:Name="SearchButton" Grid.Column="3" Style="{ThemeResource AccentButtonStyle}"
+            <Button x:Name="SearchButton" Grid.Column="5" Style="{ThemeResource AccentButtonStyle}"
                     Content="搜索" Click="OnSearchClick" />
         </Grid>
 
@@ -68,8 +76,6 @@
                             <TextBlock Text="{x:Bind Name}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" />
                             <StackPanel Orientation="Horizontal" Spacing="10">
                                 <TextBlock Text="{x:Bind DownloadText}"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                <TextBlock Text="{x:Bind UpdatedText}"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                 <TextBlock Text="{x:Bind AuthorText}" Opacity="0.7" />
                             </StackPanel>

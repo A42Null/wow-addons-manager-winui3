@@ -8,6 +8,12 @@ public class AppConfig
     public string WowRoot { get; set; } = "";
     public string Flavor { get; set; } = "_retail_";
     public string CfApiKey { get; set; } = "";
+    /// <summary>应用主题：system / light / dark</summary>
+    public string Theme { get; set; } = "system";
+    /// <summary>背景材质：mica / micaalt / acrylic</summary>
+    public string Backdrop { get; set; } = "micaalt";
+    /// <summary>导航栏位置：left / top</summary>
+    public string NavPosition { get; set; } = "left";
 }
 
 public static class ConfigService

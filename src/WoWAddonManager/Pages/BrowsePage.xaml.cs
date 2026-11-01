@@ -2,27 +2,81 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using WoWAddonManager.Services;
+using WoWAddonManager.Services.Sources;
 using WoWAddonManager.ViewModels;
 
 namespace WoWAddonManager.Pages;
 
 public sealed partial class BrowsePage : Page
 {
-    private const int PageSize = 40;
+    private static readonly List<IAddonSource> Sources =
+    [
+        new CurseForgeSource(),
+        new WclboxSource(),
+        new BigFootSource(),
+    ];
 
     private readonly List<CategoryOption> _categories = [];
+    private IAddonSource _source = null!;
     private int _page;
     private int _totalPages = 1;
 
     public BrowsePage()
     {
         InitializeComponent();
+        SourceCombo.ItemsSource = Sources.Select(s => s.DisplayName).ToList();
+        SourceCombo.SelectedIndex = 0;
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
+        ApplySourceVisibility();
         _ = LoadCategoriesAndSearchAsync();
     }
+
+    private IAddonSource Source => _source ??= Sources[0];
+
+    private void ApplySourceVisibility()
+    {
+        CategoryCombo.Visibility = Source.SupportsCategoryAndSort ? Visibility.Visible : Visibility.Collapsed;
+        SortCombo.Visibility = Source.SupportsCategoryAndSort ? Visibility.Visible : Visibility.Collapsed;
+
+        if (Source.VersionOptions.Count > 0)
+        {
+            VersionCombo.ItemsSource = Source.VersionOptions.Select(kv => new ComboBoxItem
+            {
+                Content = kv.Value,
+                Tag = kv.Key,
+            }).ToList();
+            var current = VersionCombo.SelectedItem as ComboBoxItem;
+            var keep = current?.Tag;
+            VersionCombo.SelectedIndex = 0;
+            if (keep != null)
+                foreach (ComboBoxItem i in VersionCombo.Items)
+                    if (Equals(i.Tag, keep)) VersionCombo.SelectedItem = i;
+            VersionCombo.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            VersionCombo.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private int? SelectedVersionId =>
+        VersionCombo.Visibility == Visibility.Visible &&
+        VersionCombo.SelectedItem is ComboBoxItem cb &&
+        cb.Tag is int v && v > 0 ? v : null;
+
+    private int SelectedSort
+    {
+        get
+        {
+            if (SortCombo.SelectedItem is ComboBoxItem si && int.TryParse(si.Tag?.ToString(), out var s)) return s;
+            return 6;
+        }
+    }
+
+    private int? SelectedCategory => (CategoryCombo.SelectedItem as CategoryOption)?.Id is > 0 ? (CategoryCombo.SelectedItem as CategoryOption)!.Id : null;
 
     private string AddonsDir =>
         WowInstallService.GetAddOnsDir(ConfigService.Current.WowRoot, ConfigService.Current.Flavor);
@@ -38,19 +92,32 @@ public sealed partial class BrowsePage : Page
     {
         try
         {
-            var cats = await CurseForgeService.Instance.GetAddonCategoriesAsync();
-            _categories.Clear();
-            _categories.Add(new CategoryOption { Id = 0, Name = "全部分类" });
-            _categories.AddRange(cats.OrderBy(c => c.Name)
-                .Select(c => new CategoryOption { Id = c.Id, Name = c.Name }));
-            CategoryCombo.ItemsSource = _categories;
-            CategoryCombo.SelectedIndex = 0;
+            if (Source.SupportsCategoryAndSort && _categories.Count == 0)
+            {
+                var cf = (CurseForgeSource)Sources.First(s => s.Id == "curseforge");
+                var cats = await CurseForgeService.Instance.GetAddonCategoriesAsync();
+                _categories.Add(new CategoryOption { Id = 0, Name = "全部分类" });
+                _categories.AddRange(cats.OrderBy(c => c.Name)
+                    .Select(c => new CategoryOption { Id = c.Id, Name = c.Name }));
+                CategoryCombo.ItemsSource = _categories;
+                CategoryCombo.SelectedIndex = 0;
+            }
             await DoSearchAsync(0);
         }
         catch (Exception ex)
         {
-            ShowInfo($"加载分类失败：{ex.Message}。可尝试在「设置」中填写 CurseForge API Key。", InfoBarSeverity.Error);
+            ShowInfo($"初始化失败：{ex.Message}", InfoBarSeverity.Error);
         }
+    }
+
+    private async void OnSourceChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (SourceCombo.SelectedIndex < 0 || ListResults == null) return;
+        _source = Sources[SourceCombo.SelectedIndex];
+        _categories.Clear();
+        CategoryCombo.ItemsSource = null;
+        ApplySourceVisibility();
+        await LoadCategoriesAndSearchAsync();
     }
 
     private async void OnSearchClick(object sender, RoutedEventArgs e) => await DoSearchAsync(0);
@@ -67,9 +134,15 @@ public sealed partial class BrowsePage : Page
             await DoSearchAsync(0);
     }
 
+    private async void OnVersionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (VersionCombo.IsLoaded && ListResults != null)
+            await DoSearchAsync(0);
+    }
+
     private async void OnSortChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (SortCombo.IsLoaded && ListResults != null && CategoryCombo.ItemsSource != null)
+        if (SortCombo.IsLoaded && ListResults != null && Source.SupportsCategoryAndSort)
             await DoSearchAsync(0);
     }
 
@@ -88,29 +161,22 @@ public sealed partial class BrowsePage : Page
         try
         {
             ShowBusy("正在搜索…");
-            var sort = 6;
-            if (SortCombo.SelectedItem is ComboBoxItem si && int.TryParse(si.Tag?.ToString(), out var s)) sort = s;
+            var result = await Source.ListAsync(page, SearchBox.Text, SelectedCategory, SelectedSort, SelectedVersionId);
 
-            var catId = (CategoryCombo.SelectedItem as CategoryOption)?.Id;
-            var mods = await CurseForgeService.Instance.SearchAsync(
-                SearchBox.Text, catId, sort, page, PageSize);
+            _page = result.Page;
+            _totalPages = result.HasMore ? page + 2 : page + 1;
 
-            _page = page;
-            // 匿名端点可能没有 pagination，用有无返回判断
-            _totalPages = mods.Count == PageSize ? page + 2 : page + 1;
-
-            ListResults.ItemsSource = mods.Select(m => new BrowseRow { Mod = m }).ToList();
+            ListResults.ItemsSource = result.Items.Select(i => new BrowseRow { Entry = i }).ToList();
             PageText.Text = $"第 {page + 1} 页";
             PrevPageButton.IsEnabled = page > 0;
-            NextPageButton.IsEnabled = page + 1 < _totalPages;
+            NextPageButton.IsEnabled = result.HasMore;
 
-            if (mods.Count == 0)
+            if (result.Items.Count == 0)
                 ShowInfo("没有找到匹配的插件。", InfoBarSeverity.Informational);
         }
         catch (Exception ex)
         {
-            ShowInfo($"搜索失败：{ex.Message}。匿名接口可能被限流，建议在「设置」中申请并填写免费的 CurseForge API Key。",
-                InfoBarSeverity.Error);
+            ShowInfo($"搜索失败：{ex.Message}", InfoBarSeverity.Error);
         }
         finally
         {
@@ -128,28 +194,21 @@ public sealed partial class BrowsePage : Page
         {
             btn.IsEnabled = false;
             btn.Content = "安装中…";
-            ShowBusy($"正在安装 {row.Mod.Name}…");
+            ShowBusy($"正在安装 {row.Entry.Name}…");
 
-            var cf = CurseForgeService.Instance;
-            var flavor = ConfigService.Current.Flavor;
-            var files = await cf.GetModFilesAsync(row.Mod.Id);
-            var file = CurseForgeService.PickBestFile(files, flavor)
-                       ?? throw new InvalidOperationException($"没有适配 {flavor} 的可用文件");
-
-            var url = await cf.ResolveDownloadUrlAsync(row.Mod.Id, file);
-            var folders = await WowInstallService.DownloadAndInstallAsync(url, AddonsDir);
+            var download = await Source.ResolveDownloadAsync(row.Entry);
+            var folders = await WowInstallService.DownloadAndInstallAsync(download.Url, AddonsDir);
 
             btn.Content = "已安装";
-            var name = string.IsNullOrWhiteSpace(file.DisplayName) ? file.FileName : file.DisplayName;
-            ShowInfo($"已安装 {row.Mod.Name}（{name}）到 {AddonsDir}。" +
-                     (folders.Length > 0 ? $" 包含插件: {string.Join(", ", folders)}" : ""),
+            ShowInfo($"已安装 {row.Entry.Name}（{download.FileName}）到 {AddonsDir}。" +
+                     (folders.Length > 0 ? $" 包含插件: {string.Join(", ", folders)}（旧版本已自动改名为 *.bak-* 保留）" : ""),
                 InfoBarSeverity.Success);
         }
         catch (Exception ex)
         {
             btn.IsEnabled = true;
             btn.Content = originalContent;
-            ShowInfo($"安装 {row.Mod.Name} 失败：{ex.Message}", InfoBarSeverity.Error);
+            ShowInfo($"安装 {row.Entry.Name} 失败：{ex.Message}", InfoBarSeverity.Error);
         }
         finally
         {

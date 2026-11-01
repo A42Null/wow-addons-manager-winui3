@@ -6,26 +6,46 @@
     xmlns:local="using:WoWAddonManager.Pages"
     Title="魔兽世界插件管理器">
 
-    <Grid>
+    <Grid x:Name="RootGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="48" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- 自定义标题栏 -->
+        <Grid x:Name="AppTitleBar" Background="Transparent">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0" Spacing="12">
+                <FontIcon Glyph="&#xE77B;" FontSize="16" />
+                <TextBlock x:Name="AppTitleText" Text="魔兽世界插件管理器"
+                           VerticalAlignment="Center" FontSize="12" />
+            </StackPanel>
+        </Grid>
+
         <NavigationView x:Name="NavView"
-                        IsBackButtonVisible="Collapsed"
+                        Grid.Row="1"
+                        IsTitleBarAutoPaddingEnabled="False"
+                        IsBackButtonVisible="Auto"
+                        BackRequested="NavView_BackRequested"
                         IsSettingsVisible="False"
                         PaneDisplayMode="Left"
                         OpenPaneLength="200"
                         SelectionChanged="NavView_SelectionChanged">
             <NavigationView.MenuItems>
-                <NavigationViewItem Content="已安装插件" Tag="installed" Icon="Home" />
-                <NavigationViewItem Content="浏览 CurseForge" Tag="browse">
+                <NavigationViewItem Content="主页 · 已安装" Tag="installed" Icon="Home" />
+                <NavigationViewItem Content="浏览插件" Tag="browse">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE721;" />
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
+            </NavigationView.MenuItems>
+
+            <NavigationView.FooterMenuItems>
                 <NavigationViewItem Content="设置" Tag="settings">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE713;" />
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
-            </NavigationView.MenuItems>
+            </NavigationView.FooterMenuItems>
 
             <Grid Padding="0">
                 <Frame x:Name="ContentFrame" />

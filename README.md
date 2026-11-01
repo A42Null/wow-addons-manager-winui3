@@ -32,11 +32,34 @@ WinUI 3 桌面应用：浏览 / 安装 / 更新 / 卸载《魔兽世界》CurseF
 - 未填写时回退社区匿名端点 `www.curseforge.com/api/v1`（可能被限流）。
 - 更新检查依赖 .toc 中的 `X-Curse-Project-ID`；未关联的插件无法自动更新。
 
+## 插件源
+
+浏览页左上角可切换源（搜索/安装均走所选源）：
+
+| 源 | 接入方式 | 说明 |
+|---|---|---|
+| CurseForge | 官方 API（需免费 Key）+ 匿名端点回退 | 搜索/分类/排序/分页，支持更新检查 |
+| 新手盒子 (wclbox.com) | 无需 Key。列表页 `https://www.wclbox.com/games/1?aN=plugin&version={v}&pn={页}` 服务端渲染，页面内嵌 JSON-LD ItemList（插件名+ID）；下载走同源接口 `GET /api/download/PluginItem/{id}` 返回 `{name,size,url}` CDN 直链 | 版本筛选：2=正式服 3=探索赛季 4=泰坦重铸 6=经典旧世 7=熊猫人之谜 8=燃烧的远征 9=无限；搜索为拉取前 8 页后本地过滤 |
+| 大脚整合包 | Gitee 开放 API v5（无需鉴权）：`GET https://gitee.com/api/v5/repos/bigfoot-wow/{repo}/releases?per_page=1`，下载 assets 中 `full-*.zip` | 仓库：retail/classic/classic_titan/anniversary/classic_era/forever/collections，一一对应客户端版本 |
+
+### 网易DD（dd.163.com）接入说明
+
+网易DD 的插件库数据仅通过其**桌面客户端私有协议**获取（无公开 API、无开发者平台）：
+
+1. 网页 dd.163.com/wow/plugin 为 SPA，插件数据由客户端侧 XHR 拉取，接口未公开且无文档；
+2. 其插件下载/更新依赖客户端登录态与自家分发 CDN，抓包得到的接口带签名校验，不宜直接依赖；
+3. 若后续网易开放接口（或提供 open API），在 `Services/Sources/` 下按 `IAddonSource` 实现一个 `DdSource`（参照 `WclboxSource`/`BigFootSource`），并在 `BrowsePage.Sources` 列表注册即可接入。
+
+### 安装备份
+
+安装/更新插件时，AddOns 下已存在的同名插件目录会自动改名为 `目录名.bak-时间戳` 保留（不删除），新版解压为全新目录。
+
 ## 云构建
 
 - GitHub Actions（windows-latest + VS MSBuild）：`.github/workflows/build.yml`
-  - push main / tag `v*` 自动构建，产物上传 artifact，tag 构建自动发 Release。
-- CNB（cnb.cool）：`.cnb.yml` 镜像推送流水线（需在 CNB 仓库配置 `GITHUB_TOKEN` 密钥）。
+  - push main 自动构建并更新 `dev-build` 滚动 Release；push tag `v*` 自动发正式 Release。
+- CNB（cnb.cool）：`.cnb.yml` 流水线等待 GitHub Actions 完成后，把产物收集到 CNB 仓库 `dist` 分支（`build/WoWAddonManager-win-x64.zip`），从 CNB 即可下载。
+- CNB Runner 为 Linux，WinUI3 XAML 编译必须 Windows，故编译在 GitHub Actions，CNB 负责产物分发。
   - 注：CNB Runner 为 Linux，WinUI3 XAML 编译必须 Windows，故实际打包在 GitHub Actions。
 
 ## 本地开发

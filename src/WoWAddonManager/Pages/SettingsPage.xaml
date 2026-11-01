@@ -9,6 +9,56 @@
 
             <TextBlock Text="设置" FontSize="24" FontWeight="SemiBold" />
 
+            <!-- 外观 -->
+            <TextBlock Text="外观" FontSize="16" FontWeight="SemiBold" Margin="0,8,0,0" />
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="应用主题" FontSize="14" FontWeight="SemiBold" />
+                    <TextBlock Text="选择要显示的应用主题" FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <RadioButtons x:Name="ThemeButtons" SelectionChanged="OnThemeChanged">
+                        <RadioButton Content="跟随系统" Tag="system" />
+                        <RadioButton Content="浅色" Tag="light" />
+                        <RadioButton Content="深色" Tag="dark" />
+                    </RadioButtons>
+                </StackPanel>
+            </Border>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="背景材质" FontSize="14" FontWeight="SemiBold" />
+                    <TextBlock Text="选择要显示的应用材质" FontSize="12"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <RadioButtons x:Name="BackdropButtons" SelectionChanged="OnBackdropChanged">
+                        <RadioButton Content="Mica" Tag="mica" />
+                        <RadioButton Content="Mica Alt" Tag="micaalt" />
+                        <RadioButton Content="Acrylic" Tag="acrylic" />
+                    </RadioButtons>
+                </StackPanel>
+            </Border>
+
+            <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
+                <Grid ColumnSpacing="12">
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="导航栏位置" FontSize="14" FontWeight="SemiBold" />
+                        <TextBlock Text="选择要显示的导航栏位置" FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                    <ComboBox x:Name="NavPosCombo" Grid.Column="1" Width="140"
+                              VerticalAlignment="Center" SelectionChanged="OnNavPosChanged">
+                        <ComboBoxItem Content="左侧" Tag="left" />
+                        <ComboBoxItem Content="顶部" Tag="top" />
+                    </ComboBox>
+                </Grid>
+            </Border>
+
             <!-- 魔兽世界目录 -->
             <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"

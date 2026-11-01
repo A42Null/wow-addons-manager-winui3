@@ -152,7 +152,20 @@ public class WowInstallService
                     .Distinct()
                     .ToArray();
 
-                archive.ExtractToDirectory(addonsDir, overwriteFiles: true);
+                // 备份旧版本：已存在的同名插件目录改名为 xxx.bak-<时间戳>，不删除
+                var renamed = new List<string>();
+                foreach (var root in roots)
+                {
+                    var existing = Path.Combine(addonsDir, root);
+                    if (Directory.Exists(existing))
+                    {
+                        var bak = $"{existing}.bak-{DateTime.Now:yyyyMMdd-HHmmss}";
+                        Directory.Move(existing, bak);
+                        renamed.Add($"{root} → {Path.GetFileName(bak)}");
+                    }
+                }
+
+                archive.ExtractToDirectory(addonsDir, overwriteFiles: false);
                 return roots;
             }
         }

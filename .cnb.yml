@@ -1,20 +1,54 @@
-# CNB 云原生构建配置
-# 说明：CNB Runner 为 Linux 环境，WinUI3 的 XAML 编译必须在 Windows 上执行，
-# 因此真正的打包构建放在 GitHub Actions（windows-latest）。
-# 本流水线负责把代码镜像推送到 GitHub 仓库，推送后自动触发 Actions 构建。
-# 需要在 CNB 仓库「环境变量/密钥」中配置 GITHUB_TOKEN（对目标仓库有 repo 权限）。
+# CNB 云原生流水线
+# 职责：等待 GitHub Actions（真正在 windows-latest 上执行的 WinUI3 构建）完成后，
+#       把 dev-build Release 里的构建产物收集到 CNB 仓库的 dist 分支，
+#       之后从 CNB（仓库 dist 分支 / 网页）即可下载产物，无需访问 GitHub。
 
 main:
   push:
-    - name: mirror-push-to-github
+    - name: collect-build-artifact
       stages:
-        - name: 同步到 GitHub（触发 Actions 云构建）
+        - name: 同步到 GitHub（如已配置 GITHUB_TOKEN 密钥）
           script: |
-            if [ -z "$GITHUB_TOKEN" ]; then
-              echo "未配置 GITHUB_TOKEN 密钥，跳过镜像推送。请在 CNB 仓库设置中配置。"
-              exit 0
+            if [ -n "$GITHUB_TOKEN" ]; then
+              git push --force "https://x-access-token:${GITHUB_TOKEN}@github.com/A42Null/wow-addons-manager-winui3.git" HEAD:main
+            else
+              echo "未配置 GITHUB_TOKEN，跳过（构建由本地同时推送 GitHub 触发）"
             fi
-            git push --force "https://x-access-token:${GITHUB_TOKEN}@github.com/A42Null/wow-addons-manager-winui3.git" "HEAD:main"
+
+        - name: 等待 GitHub Actions 构建完成
+          script: |
+            SHA=$(git rev-parse HEAD)
+            ok=0
+            for i in $(seq 1 90); do
+              resp=$(curl -s --max-time 20 "https://api.github.com/repos/A42Null/wow-addons-manager-winui3/actions/runs?head_sha=${SHA}&per_page=10")
+              line=$(echo "$resp" | grep -o '"status": *"[a-z_]*"' | head -1)
+              concl=$(echo "$resp" | grep -o '"conclusion": *"[a-z_]*"' | head -1)
+              echo "[$i] $line $concl"
+              if echo "$line" | grep -q "completed"; then
+                if echo "$concl" | grep -q "success"; then ok=1; break; fi
+                echo "GitHub Actions 构建失败"; exit 1
+              fi
+              sleep 10
+            done
+            [ "$ok" = "1" ] || { echo "等待构建超时"; exit 1; }
+
+        - name: 下载产物并发布到 dist 分支
+          script: |
+            curl -sL --max-time 300 -o /tmp/wam.zip "https://github.com/A42Null/wow-addons-manager-winui3/releases/download/dev-build/WoWAddonManager-win-x64.zip"
+            ls -la /tmp/wam.zip
+            test $(stat -c%s /tmp/wam.zip) -gt 1000000 || { echo "产物下载异常"; exit 1; }
+            git config user.email "ci@cnb.cool"
+            git config user.name "cnb-ci"
+            if git ls-remote --exit-code --heads origin dist >/dev/null 2>&1; then
+              git fetch origin dist && git checkout -B dist FETCH_HEAD
+            else
+              git checkout -B dist
+            fi
+            mkdir -p build
+            cp /tmp/wam.zip build/WoWAddonManager-win-x64.zip
+            git add -A build
+            git commit -m "artifact: $(date '+%F %T') 来自 GitHub Actions 的构建产物" || echo "无变化"
+            git push origin dist
 
 $:
   vscode:

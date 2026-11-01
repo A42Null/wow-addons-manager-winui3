@@ -20,6 +20,58 @@ public sealed partial class SettingsPage : Page
         WowRootBox.Text = cfg.WowRoot;
         ApiKeyBox.Password = cfg.CfApiKey;
         RefreshFlavors(cfg.Flavor);
+
+        // 外观
+        SelectByTag(ThemeButtons, cfg.Theme);
+        SelectByTag(BackdropButtons, cfg.Backdrop);
+        SelectByTag(NavPosCombo, cfg.NavPosition);
+    }
+
+    private static void SelectByTag(Selector selector, string? tag)
+    {
+        foreach (var item in selector.Items)
+        {
+            if ((item as FrameworkElement)?.Tag?.ToString() == tag)
+            {
+                selector.SelectedItem = item;
+                return;
+            }
+        }
+    }
+
+    private void OnThemeChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (ThemeButtons.SelectedItem is not RadioButton rb) return;
+        SaveAppearance("Theme", rb.Tag?.ToString() ?? "system");
+    }
+
+    private void OnBackdropChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (BackdropButtons.SelectedItem is not RadioButton rb) return;
+        SaveAppearance("Backdrop", rb.Tag?.ToString() ?? "micaalt");
+    }
+
+    private void OnNavPosChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (NavPosCombo.SelectedItem is not ComboBoxItem cb) return;
+        SaveAppearance("NavPosition", cb.Tag?.ToString() ?? "left");
+    }
+
+    private void SaveAppearance(string key, string value)
+    {
+        var cfg = ConfigService.Current;
+        var current = key switch
+        {
+            "Theme" => cfg.Theme,
+            "Backdrop" => cfg.Backdrop,
+            "NavPosition" => cfg.NavPosition,
+            _ => "",
+        };
+        if (current == value) return; // 初始化期间避免回写
+
+        var prop = typeof(AppConfig).GetProperty(key)!;
+        prop.SetValue(cfg, value);
+        ConfigService.Save(cfg);
     }
 
     private void RefreshFlavors(string preferredFlavor)

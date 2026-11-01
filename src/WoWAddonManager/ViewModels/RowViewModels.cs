@@ -51,23 +51,17 @@ public class AddonRow : INotifyPropertyChanged
 
 public class BrowseRow
 {
-    public CfMod Mod { get; init; } = new();
+    public SourceEntry Entry { get; init; } = new();
 
     public ImageSource? Logo =>
-        string.IsNullOrEmpty(Mod.Logo?.ThumbnailUrl) ? null : new BitmapImage(new Uri(Mod.Logo.ThumbnailUrl));
+        string.IsNullOrEmpty(Entry.LogoUrl) ? null : new BitmapImage(new Uri(Entry.LogoUrl));
 
     public Visibility LogoVisibility => Logo == null ? Visibility.Collapsed : Visibility.Visible;
 
-    public string Name => Mod.Name;
-    public string Summary => Mod.Summary;
-
-    public string AuthorText => Mod.Authors.Count > 0
-        ? "作者: " + string.Join(", ", Mod.Authors.Select(a => a.Name))
-        : "";
-
-    public string DownloadText => $"下载 {Mod.DownloadCount:N0}";
-
-    public string UpdatedText => $"更新于 {Mod.DateModified.LocalDateTime:yyyy-MM-dd}";
+    public string Name => Entry.Name;
+    public string Summary => Entry.Summary;
+    public string AuthorText => Entry.Author;
+    public string DownloadText => Entry.Extra;
 }
 
 public class CategoryOption
