@@ -39,16 +39,29 @@ WinUI 3 桌面应用：浏览 / 安装 / 更新 / 卸载《魔兽世界》CurseF
 | 源 | 接入方式 | 说明 |
 |---|---|---|
 | CurseForge | 官方 API（需免费 Key）+ 匿名端点回退 | 搜索/分类/排序/分页，支持更新检查 |
-| 新手盒子 (wclbox.com) | 无需 Key。列表页 `https://www.wclbox.com/games/1?aN=plugin&version={v}&pn={页}` 服务端渲染，页面内嵌 JSON-LD ItemList（插件名+ID）；下载走同源接口 `GET /api/download/PluginItem/{id}` 返回 `{name,size,url}` CDN 直链 | 版本筛选：2=正式服 3=探索赛季 4=泰坦重铸 6=经典旧世 7=熊猫人之谜 8=燃烧的远征 9=无限；搜索为拉取前 8 页后本地过滤 |
-| 大脚整合包 | Gitee 开放 API v5（无需鉴权）：`GET https://gitee.com/api/v5/repos/bigfoot-wow/{repo}/releases?per_page=1`，下载 assets 中 `full-*.zip` | 仓库：retail/classic/classic_titan/anniversary/classic_era/forever/collections，一一对应客户端版本 |
+| 新手盒子 (wclbox.com) | 无需 Key。列表页 `https://www.wclbox.com/games/1?aN=plugin&version={v}&pn={页}` 服务端渲染，页面内嵌 JSON-LD ItemList（插件名+ID）；下载走同源接口 `GET /api/download/PluginItem/{id}` 返回 `{name,size,url}` CDN 直链 | 版本筛选（可在浏览页直接切换，按「设置」的客户端版本自动选中）：2=正式服 4=泰坦重铸 6=经典旧世 7=熊猫人之谜 8=燃烧的远征 9=无限；探索赛季(3)不提供；搜索为拉取前 8 页后本地过滤 |
+| 大脚插件站 (wowui.178.com) | 无需 Key。列表/搜索 `GET /wow/0_34676/d/{偏移}?k={关键词}`（10条/页 SSR）；详情页 `/ui/{id}` 内嵌 `var resp=[{file_id,file_name,version,update_time,main_game_version}]`（首条最新，末条时间=首次发布）；下载直链 `GET /down/{ui_id}/{file_id}/{file_name}` | 列表展示版本号/首发/更新时间/适配游戏版本 |
+| 大脚整合包 (Gitee) | Gitee 开放 API v5（无需鉴权）：`GET https://gitee.com/api/v5/repos/bigfoot-wow/{repo}/releases?per_page=1`，下载 assets 中 `full-*.zip` | 仓库：retail/classic/classic_titan/anniversary/classic_era/forever/collections |
+| 网易DD (dd.163.com) | **受限**：插件市场接口需 DD 客户端登录态（未公开）。已解析：`GET https://uiapi.w.163.com/game_type/list`（10001=正式服 2=泰坦重铸 7=无限服 3=经典怀旧服 6=熊猫人之谜 4=燃烧的远征）、市场 Web 端 `dd.163.com/dd-wow-tools/`（umi SPA，数据经客户端桥接）、数据 API 主机 `ds-api.w.163.com`（端点未公开） | 应用内显示接入说明；抓包确认端点后按 `IAddonSource` 补全 `NetEaseDDSource` 即可 |
+
+### 违规插件过滤
+
+CurseForge / 大脚插件站 / 大脚整合包源的列表会自动隐藏名称包含以下关键字的插件：
+`BiaoGe`、`BiaoGeX`、`TuanJian`、`ZongLan`、`HanHua`。
+
+### 版本对应规则（ Forever = 无限 ）
+
+`_forever_` ↔ 无限服：新手盒子 version=9，大脚 Gitee 仓库 `forever`，网易DD game_type=7。
 
 ### 网易DD（dd.163.com）接入说明
 
-网易DD 的插件库数据仅通过其**桌面客户端私有协议**获取（无公开 API、无开发者平台）：
+网易DD 的插件库数据仅通过其**桌面客户端私有协议**获取（无公开 API、无开发者平台）。已逆向到的信息：
 
-1. 网页 dd.163.com/wow/plugin 为 SPA，插件数据由客户端侧 XHR 拉取，接口未公开且无文档；
-2. 其插件下载/更新依赖客户端登录态与自家分发 CDN，抓包得到的接口带签名校验，不宜直接依赖；
-3. 若后续网易开放接口（或提供 open API），在 `Services/Sources/` 下按 `IAddonSource` 实现一个 `DdSource`（参照 `WclboxSource`/`BigFootSource`），并在 `BrowsePage.Sources` 列表注册即可接入。
+1. 客户端配置接口 `https://uiapi.w.163.com/game_type/list`：含全部魔兽版本映射与官方 163UI_Info.zip；
+2. 插件市场 Web 端为 `https://dd.163.com/dd-wow-tools/`（umi SPA），运行于 DD 客户端 WebView 内，列表/安装数据经客户端 IPC 桥接；
+3. 客户端数据 API 主机 `https://ds-api.w.163.com`，端点未公开、需登录态与签名。
+
+下一步：登录 DD 客户端抓包（Fiddler/mitmproxy）确认市场端点后，在 `Services/Sources/NetEaseDDSource.cs` 补全 `ListAsync`/`ResolveDownloadAsync` 并在 `BrowsePage.Sources` 中保留注册即可。
 
 ### 安装备份
 

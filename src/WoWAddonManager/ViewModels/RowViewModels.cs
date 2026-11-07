@@ -62,7 +62,12 @@ public class BrowseRow
     public string Name => Entry.Name;
     public string Summary => Entry.Summary;
     public string AuthorText => Entry.Author;
-    public string DownloadText => Entry.Extra;
+
+    public string VersionText => string.IsNullOrWhiteSpace(Entry.Version) ? "—" : Entry.Version;
+    public string FirstReleasedText => string.IsNullOrWhiteSpace(Entry.FirstReleased) ? "—" : Entry.FirstReleased;
+    public string UpdatedText => string.IsNullOrWhiteSpace(Entry.Updated) ? "—" : Entry.Updated;
+    public string GameVersionsText => string.IsNullOrWhiteSpace(Entry.GameVersions) ? "—" : Entry.GameVersions;
+    public string DownloadText => string.IsNullOrWhiteSpace(Entry.Extra) ? "" : Entry.Extra;
 }
 
 public class CategoryOption

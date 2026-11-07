@@ -118,6 +118,7 @@ public sealed class CurseForgeService
         "_classic_titan_"                        => ["3.80"],                  // 泰坦重铸时光服（WLK 3.80.x 国服）
         "_anniversary_"                          => ["2."],                    // 周年纪念服（TBC）
         "_classic_era_" or "_classic_era_ptr_"   => ["1.14", "1.15"],          // 永久60 / 旧世经典
+        "_forever_"                              => ["12."],                   // 无限服 (Forever)
         _ => []
     };
 

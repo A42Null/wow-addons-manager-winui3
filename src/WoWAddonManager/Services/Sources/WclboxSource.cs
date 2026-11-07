@@ -26,7 +26,6 @@ public class WclboxSource : IAddonSource
     {
         [0] = "全部版本",
         [2] = "正式服",
-        [3] = "探索赛季",
         [4] = "泰坦重铸",
         [6] = "经典旧世 (永久60)",
         [7] = "熊猫人之谜",
@@ -34,11 +33,27 @@ public class WclboxSource : IAddonSource
         [9] = "无限",
     };
 
+    /// <summary>flavor 目录 → wclbox version id（探索赛季不提供）。</summary>
+    public static readonly IReadOnlyDictionary<string, int> FlavorToVersion = new Dictionary<string, int>
+    {
+        ["_retail_"] = 2,
+        ["_retail_ptr_"] = 2,
+        ["_beta_"] = 2,
+        ["_classic_titan_"] = 4,
+        ["_classic_era_"] = 6,
+        ["_classic_"] = 7,
+        ["_anniversary_"] = 8,
+        ["_forever_"] = 9,
+    };
+
     private static HttpClient CreateHttp()
     {
         var h = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
         h.DefaultRequestHeaders.UserAgent.ParseAdd(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
+        h.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+        h.DefaultRequestHeaders.TryAddWithoutValidation("Accept-Language", "zh-CN,zh;q=0.9");
+        h.DefaultRequestHeaders.TryAddWithoutValidation("Referer", "https://www.wclbox.com/games/1");
         return h;
     }
 
@@ -62,12 +77,21 @@ public class WclboxSource : IAddonSource
 
     private static async Task<string> GetPageAsync(string url)
     {
-        for (int attempt = 0; attempt < 2; attempt++)
+        // 站点偶发 302/限流，多重试几次
+        for (int attempt = 0; attempt < 3; attempt++)
         {
-            using var resp = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
-            if (resp.IsSuccessStatusCode)
-                return await resp.Content.ReadAsStringAsync();
-            if (attempt == 0) await Task.Delay(800); // 偶发 302/限流，稍候重试一次
+            try
+            {
+                using var resp = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+                if (resp.IsSuccessStatusCode)
+                {
+                    var html = await resp.Content.ReadAsStringAsync();
+                    if (html.Contains("PluginItem") || html.Contains("ListItem"))
+                        return html;
+                }
+            }
+            catch { }
+            await Task.Delay(600 * (attempt + 1));
         }
         return "";
     }
@@ -85,6 +109,7 @@ public class WclboxSource : IAddonSource
                 var html = await GetPageAsync(BuildUrl(versionId, pn));
                 foreach (var it in ParseItemList(html))
                 {
+                    if (SourceFilter.IsBlocked(it.Name)) continue;
                     if (seen.Add(it.Id) &&
                         it.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase))
                         items.Add(it);
@@ -95,7 +120,7 @@ public class WclboxSource : IAddonSource
         }
 
         var html1 = await GetPageAsync(BuildUrl(versionId, page + 1));
-        items = ParseItemList(html1);
+        items = ParseItemList(html1).Where(i => !SourceFilter.IsBlocked(i.Name)).ToList();
         return new SourceResult
         {
             Page = page,

@@ -30,13 +30,13 @@ public class BigFootSource : IAddonSource
     ];
 
     public string Id => "bigfoot";
-    public string DisplayName => "大脚整合包";
+    public string DisplayName => "大脚整合包 (Gitee)";
     public bool SupportsCategoryAndSort => false;
     public IReadOnlyDictionary<int, string> VersionOptions => new Dictionary<int, string>();
 
-    public Task<SourceResult> ListAsync(int page, string? keyword, int? categoryId, int sortField, int? versionId)
+    public async Task<SourceResult> ListAsync(int page, string? keyword, int? categoryId, int sortField, int? versionId)
     {
-        if (page > 0) return Task.FromResult(new SourceResult { Page = page, HasMore = false });
+        if (page > 0) return new SourceResult { Page = page, HasMore = false };
 
         var flavor = ConfigService.Current.Flavor;
         var items = Repos.Select(r => new SourceEntry
@@ -46,14 +46,46 @@ public class BigFootSource : IAddonSource
             Summary = $"Gitee 仓库 bigfoot-wow/{r.repo} 的最新 Release 整包",
             Author = "大脚 (BigFoot)",
             Extra = r.flavor.Length > 0 && r.flavor == flavor ? "★ 匹配当前客户端" : r.flavor,
+            Version = "",
+            GameVersions = r.flavor,
         }).ToList();
+
+        // 并行取各仓库最新 Release：版本号 + 发布时间
+        try
+        {
+            var tasks = items.Select(async it =>
+            {
+                try
+                {
+                    using var resp = await Http.GetAsync($"{Api}/repos/{Org}/{it.Id}/releases?per_page=1");
+                    if (!resp.IsSuccessStatusCode) return;
+                    var json = await resp.Content.ReadAsStringAsync();
+                    using var doc = JsonDocument.Parse(json);
+                    if (doc.RootElement.ValueKind == JsonValueKind.Array && doc.RootElement.GetArrayLength() > 0)
+                    {
+                        var rel = doc.RootElement[0];
+                        it.Version = rel.TryGetProperty("tag_name", out var t) ? t.GetString() ?? "" : "";
+                        var dateStr = rel.TryGetProperty("published_at", out var p) && p.ValueKind == JsonValueKind.String
+                            ? p.GetString() : null;
+                        dateStr ??= rel.TryGetProperty("created_at", out var c) && c.ValueKind == JsonValueKind.String
+                            ? c.GetString() : null;
+                        if (dateStr != null && DateTimeOffset.TryParse(dateStr, out var dt))
+                            it.Updated = dt.LocalDateTime.ToString("yyyy-MM-dd");
+                    }
+                }
+                catch { }
+            }).ToArray();
+            await Task.WhenAll(tasks);
+        }
+        catch { }
 
         if (!string.IsNullOrWhiteSpace(keyword))
             items = items.Where(i =>
                 i.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase) ||
                 i.Id.Contains(keyword, StringComparison.OrdinalIgnoreCase)).ToList();
+        items = items.Where(i => !SourceFilter.IsBlocked(i.Name)).ToList();
 
-        return Task.FromResult(new SourceResult { Page = 0, HasMore = false, Items = items });
+        return new SourceResult { Page = 0, HasMore = false, Items = items };
     }
 
     public async Task<SourceDownload> ResolveDownloadAsync(SourceEntry entry)

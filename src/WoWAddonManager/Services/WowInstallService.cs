@@ -27,6 +27,7 @@ public class WowInstallService
         new() { Folder = "_anniversary_",     DisplayName = "周年纪念服 (TBC Anniversary)" },
         new() { Folder = "_classic_era_",     DisplayName = "永久60 (Classic Era)" },
         new() { Folder = "_classic_era_ptr_", DisplayName = "永久60 PTR" },
+        new() { Folder = "_forever_",         DisplayName = "无限服 (Forever)" },
     ];
 
     /// <summary>自动检测魔兽世界安装目录：注册表 → 常见路径。</summary>

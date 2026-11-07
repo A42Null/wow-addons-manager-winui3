@@ -3,3 +3,6 @@ obj/
 .vs/
 *.user
 versions/
+NetEaseDD/
+.workbuddy/NetEaseDD/
+_workbuddy_tmp/

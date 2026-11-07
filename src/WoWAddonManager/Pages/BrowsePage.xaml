@@ -75,9 +75,20 @@
                         <StackPanel Grid.Column="1" Spacing="2">
                             <TextBlock Text="{x:Bind Name}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" />
                             <StackPanel Orientation="Horizontal" Spacing="10">
-                                <TextBlock Text="{x:Bind DownloadText}"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                <TextBlock Text="{x:Bind AuthorText}" Opacity="0.7" />
+                                <TextBlock FontSize="12">
+                                    <Run Text="版本 " Foreground="{ThemeResource TextFillColorSecondaryBrush}" /><Run Text="{x:Bind VersionText}" FontWeight="SemiBold" />
+                                </TextBlock>
+                                <TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                                    <Run Text="首发 " /><Run Text="{x:Bind FirstReleasedText}" />
+                                </TextBlock>
+                                <TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                                    <Run Text="更新 " /><Run Text="{x:Bind UpdatedText}" />
+                                </TextBlock>
+                                <TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                                    <Run Text="适配 " /><Run Text="{x:Bind GameVersionsText}" />
+                                </TextBlock>
+                                <TextBlock Text="{x:Bind DownloadText}" FontSize="12" Opacity="0.7" />
+                                <TextBlock Text="{x:Bind AuthorText}" FontSize="12" Opacity="0.7" />
                             </StackPanel>
                             <TextBlock Text="{x:Bind Summary}" Opacity="0.8" MaxLines="2"
                                        TextTrimming="CharacterEllipsis" TextWrapping="Wrap" />

@@ -13,7 +13,9 @@ public sealed partial class BrowsePage : Page
     [
         new CurseForgeSource(),
         new WclboxSource(),
+        new Wowui178Source(),
         new BigFootSource(),
+        new NetEaseDDSource(),
     ];
 
     private readonly List<CategoryOption> _categories = [];
@@ -117,6 +119,17 @@ public sealed partial class BrowsePage : Page
         _categories.Clear();
         CategoryCombo.ItemsSource = null;
         ApplySourceVisibility();
+
+        // 新手盒子：按当前客户端版本自动选中筛选
+        if (_source is WclboxSource && VersionCombo.Items.Count > 0)
+        {
+            var flavor = ConfigService.Current.Flavor;
+            if (WclboxSource.FlavorToVersion.TryGetValue(flavor, out var vid))
+            {
+                foreach (ComboBoxItem i in VersionCombo.Items)
+                    if (Equals(i.Tag, vid)) { VersionCombo.SelectedItem = i; break; }
+            }
+        }
         await LoadCategoriesAndSearchAsync();
     }
 
@@ -171,7 +184,9 @@ public sealed partial class BrowsePage : Page
             PrevPageButton.IsEnabled = page > 0;
             NextPageButton.IsEnabled = result.HasMore;
 
-            if (result.Items.Count == 0)
+            if (!string.IsNullOrEmpty(result.Notice))
+                ShowInfo(result.Notice, InfoBarSeverity.Informational, "插件源说明");
+            else if (result.Items.Count == 0)
                 ShowInfo("没有找到匹配的插件。", InfoBarSeverity.Informational);
         }
         catch (Exception ex)

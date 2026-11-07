@@ -46,12 +46,17 @@
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1" CornerRadius="8" Padding="16">
                 <Grid ColumnSpacing="12">
-                    <StackPanel Spacing="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
                         <TextBlock Text="导航栏位置" FontSize="14" FontWeight="SemiBold" />
                         <TextBlock Text="选择要显示的导航栏位置" FontSize="12"
+                                   TextWrapping="Wrap"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     </StackPanel>
-                    <ComboBox x:Name="NavPosCombo" Grid.Column="1" Width="140"
+                    <ComboBox x:Name="NavPosCombo" Grid.Column="1" Width="140" MinHeight="0"
                               VerticalAlignment="Center" SelectionChanged="OnNavPosChanged">
                         <ComboBoxItem Content="左侧" Tag="left" />
                         <ComboBoxItem Content="顶部" Tag="top" />
