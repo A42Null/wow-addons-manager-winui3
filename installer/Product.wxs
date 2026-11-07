@@ -8,6 +8,8 @@
       Compressed="yes">
     <SummaryInformation Description="魔兽世界插件管理器 — 浏览/安装/更新魔兽世界插件" />
 
+    <MediaTemplate EmbedCab="yes" />
+
     <MajorUpgrade DowngradeErrorMessage="已安装更高版本，无法降级安装。" />
 
     <!-- 按用户安装到 %LocalAppData%\WoWAddonManager，无需管理员权限 -->
