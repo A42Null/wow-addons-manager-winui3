@@ -78,7 +78,7 @@ jobs:
 
       - name: Harvest publish dir
         if: startsWith(github.ref, 'refs/tags/')
-        run: wix heat dir publish -gg -sfrag -srd -sreg -cg AppFiles -dr INSTALLFOLDER -var var.PublishDir -out harvest.wxs
+        run: installer/harvest.ps1 -PublishDir publish -OutputPath harvest.wxs
 
       - name: Build MSI
         if: startsWith(github.ref, 'refs/tags/')
