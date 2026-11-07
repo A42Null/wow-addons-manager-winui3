@@ -53,31 +53,33 @@ main:
         - name: 创建 CNB Release 并上传资产（zip + MSI）
           script: |
             API="https://api.cnb.cool/A42Null/wow-addons-manager-winui3"
-            AUTH="Authorization: Bearer $CNB_TOKEN"
+            AUTH="Authorization: Bearer ${CNB_TOKEN:-${CNB_ACCESS_TOKEN}}"
             TAG=v0.3.0
+            echo "token present: $([ -n "${CNB_TOKEN:-}" ] && echo yes || echo no)"
             curl -sL --max-time 600 -o /tmp/wam.zip "https://github.com/A42Null/wow-addons-manager-winui3/releases/download/$TAG/WoWAddonManager-win-x64.zip"
             curl -sL --max-time 600 -o /tmp/wam.msi "https://github.com/A42Null/wow-addons-manager-winui3/releases/download/$TAG/WoWAddonManager-0.3.0-x64.msi"
             ls -la /tmp/wam.zip /tmp/wam.msi
-            rel=$(curl -s -X POST -H "$AUTH" -H "Content-Type: application/json" \
+            rel=$(curl -s -X POST -H "$AUTH" -H "Content-Type: application/json" -H "Accept: application/json" \
               -d "{\"tag_name\":\"$TAG\",\"name\":\"WoWAddonManager $TAG\",\"body\":\"魔兽世界插件管理器 $TAG。附件：绿色版 zip 与 MSI 安装包。\"}" \
               "$API/-/releases")
             echo "CREATE: $(echo "$rel" | head -c 300)"
             rel_id=$(echo "$rel" | grep -oE '"id":[0-9]+' | head -1 | grep -oE '[0-9]+')
             if [ -z "$rel_id" ]; then
-              rel=$(curl -s -H "$AUTH" "$API/-/releases?per_page=5")
+              rel=$(curl -s -H "$AUTH" -H "Accept: application/json" "$API/-/releases?per_page=5")
+              echo "LIST: $(echo "$rel" | head -c 300)"
               rel_id=$(echo "$rel" | grep -oE '"id":[0-9]+' | head -1 | grep -oE '[0-9]+')
             fi
             echo "release_id=$rel_id"
             [ -n "$rel_id" ] || { echo "无法获得 release id"; exit 1; }
             upload_asset() {
               name=$1; file=$2
-              up=$(curl -s -X POST -H "$AUTH" -H "Content-Type: application/json" \
+              up=$(curl -s -X POST -H "$AUTH" -H "Content-Type: application/json" -H "Accept: application/json" \
                 -d "{\"asset_name\":\"$name\"}" \
                 "$API/-/releases/$rel_id/-/asset-upload-url?overwrite=true")
               echo "UPLOAD-URL[$name]: $(echo "$up" | head -c 400)"
               url=$(echo "$up" | grep -oE '"upload_url":"[^"]+"' | head -1 | cut -d'"' -f4)
               curl -s -X PUT -H "$AUTH" --upload-file "$file" "$url" | head -c 200; echo
-              conf=$(curl -s -X POST -H "$AUTH" -H "Content-Type: application/json" \
+              conf=$(curl -s -X POST -H "$AUTH" -H "Content-Type: application/json" -H "Accept: application/json" \
                 -d "{\"verify_url\":\"$up\"}" \
                 "$API/-/releases/$rel_id/-/asset-upload-confirmation")
               echo "CONFIRM[$name]: $(echo "$conf" | head -c 300)"
