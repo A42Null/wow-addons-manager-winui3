@@ -67,6 +67,35 @@ jobs:
           gh release create dev-build --repo ${{ github.repository }} --title "开发构建 (dev)" --notes "main 分支最新自动构建，每次推送覆盖" --prerelease || true
           gh release upload dev-build WoWAddonManager-win-x64.zip --clobber --repo ${{ github.repository }}
 
+      # ---- MSI 安装包（仅 tag 构建时生成并随 Release 发布）----
+      - name: Publish self-contained output (MSI)
+        if: startsWith(github.ref, 'refs/tags/')
+        run: dotnet publish src/WoWAddonManager/WoWAddonManager.csproj -c Release -r win-x64 --self-contained -p:Platform=x64 -o publish
+
+      - name: Install WiX v5
+        if: startsWith(github.ref, 'refs/tags/')
+        run: dotnet tool install --global wix --version 5.0.2
+
+      - name: Harvest publish dir
+        if: startsWith(github.ref, 'refs/tags/')
+        run: wix heat dir publish -gg -sfrag -srd -sreg -cg AppFiles -dr INSTALLFOLDER -var var.PublishDir -out harvest.wxs
+
+      - name: Build MSI
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $v = $env:GITHUB_REF_NAME.TrimStart('v')
+          if ($v -notmatch '^\d') { $v = "0.0.0" }
+          wix build -arch x64 -define "PublishDir=publish" -define "MsiVersion=$v" -out "WoWAddonManager-$v-x64.msi" installer/Product.wxs harvest.wxs
+          Get-Item *.msi
+
+      - name: Upload MSI artifact
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: WoWAddonManager-msi
+          path: "*.msi"
+
   release:
     if: startsWith(github.ref, 'refs/tags/')
     needs: build
@@ -74,12 +103,17 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Download artifact
+      - name: Download zip artifact
         uses: actions/download-artifact@v4
         with:
           name: WoWAddonManager-win-x64
 
+      - name: Download MSI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: WoWAddonManager-msi
+
       - name: Create release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "${GITHUB_REF_NAME}" "WoWAddonManager-win-x64.zip" --repo "${{ github.repository }}" --title "WoWAddonManager ${GITHUB_REF_NAME}" --generate-notes
+        run: gh release create "${GITHUB_REF_NAME}" "WoWAddonManager-win-x64.zip" *.msi --repo "${{ github.repository }}" --title "WoWAddonManager ${GITHUB_REF_NAME}" --generate-notes
