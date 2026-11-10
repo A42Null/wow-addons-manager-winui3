@@ -39,8 +39,8 @@ WinUI 3 桌面应用：浏览 / 安装 / 更新 / 卸载《魔兽世界》CurseF
 | 源 | 接入方式 | 说明 |
 |---|---|---|
 | CurseForge | 官方 API（需免费 Key）+ 匿名端点回退 | 搜索/分类/排序/分页，支持更新检查 |
-| 新手盒子 (wclbox.com) | 无需 Key。列表页 `https://www.wclbox.com/games/1?aN=plugin&version={v}&pn={页}` 服务端渲染，页面内嵌 JSON-LD ItemList（插件名+ID）；下载走同源接口 `GET /api/download/PluginItem/{id}` 返回 `{name,size,url}` CDN 直链 | 版本筛选（可在浏览页直接切换，按「设置」的客户端版本自动选中）：2=正式服 4=泰坦重铸 6=经典旧世 7=熊猫人之谜 8=燃烧的远征 9=无限；探索赛季(3)不提供；搜索为拉取前 8 页后本地过滤 |
-| 大脚插件站 (wowui.178.com) | 无需 Key。列表/搜索 `GET /wow/0_34676/d/{偏移}?k={关键词}`（10条/页 SSR）；详情页 `/ui/{id}` 内嵌 `var resp=[{file_id,file_name,version,update_time,main_game_version}]`（首条最新，末条时间=首次发布）；下载直链 `GET /down/{ui_id}/{file_id}/{file_name}` | 列表展示版本号/首发/更新时间/适配游戏版本 |
+| 新手盒子 (wclbox.com) | 无需 Key。列表页 `https://www.wclbox.com/games/1?aN=plugin&version={v}&pn={页}` 服务端渲染，页面内嵌 JSON-LD ItemList（插件名+ID）；下载走同源接口 `GET /api/download/PluginItem/{id}` 返回 `{name,size,url}` CDN 直链 | 版本筛选（可在浏览页直接切换，按「设置」的客户端版本自动选中）：2=正式服 4=泰坦重铸 6=经典旧世 7=熊猫人之谜 8=燃烧的远征 9=无限；探索赛季(3)不提供。**注意**：非默认版本的条目 URL 带 `?version=N` 后缀，解析需兼容；关键词搜索为拉取前 20 页（600 条）后本地过滤，若筛选版本无命中会自动回退全部版本并提示 |
+| 大脚插件站 (wowui.178.com) | 无需 Key。列表/搜索 `GET /wow/0_37499/d/{偏移}?k={关键词}`（10条/页 SSR）；详情页 `/ui/{id}` 内嵌 `var resp=[{file_id,file_name,version,update_time,main_game_version}]`（首条最新，末条时间=首次发布）；下载直链 `GET /down/{ui_id}/{file_id}/{file_name}` | 列表展示版本号/首发/更新时间/适配游戏版本；支持版本筛选（按名称前缀 + `main_game_version` 判定，无法判定的条目宽松保留） |
 | 大脚整合包 (Gitee) | Gitee 开放 API v5（无需鉴权）：`GET https://gitee.com/api/v5/repos/bigfoot-wow/{repo}/releases?per_page=1`，下载 assets 中 `full-*.zip` | 仓库：retail/classic/classic_titan/anniversary/classic_era/forever/collections |
 | 网易DD (dd.163.com) | **受限**：插件市场接口需 DD 客户端登录态（未公开）。已解析：`GET https://uiapi.w.163.com/game_type/list`（10001=正式服 2=泰坦重铸 7=无限服 3=经典怀旧服 6=熊猫人之谜 4=燃烧的远征）、市场 Web 端 `dd.163.com/dd-wow-tools/`（umi SPA，数据经客户端桥接）、数据 API 主机 `ds-api.w.163.com`（端点未公开） | 应用内显示接入说明；抓包确认端点后按 `IAddonSource` 补全 `NetEaseDDSource` 即可 |
 
