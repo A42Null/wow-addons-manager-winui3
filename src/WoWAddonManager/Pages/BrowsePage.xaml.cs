@@ -22,6 +22,10 @@ public sealed partial class BrowsePage : Page
     private IAddonSource _source = null!;
     private int _page;
     private int _totalPages = 1;
+    /// <summary>搜索请求序号：只渲染最新一次请求的结果，避免并发请求乱序覆盖。</summary>
+    private int _searchSeq;
+    /// <summary>切换源/初始化版本下拉时抑制事件，避免触发多余搜索。</summary>
+    private bool _suppressVersionEvent;
 
     public BrowsePage()
     {
@@ -45,18 +49,26 @@ public sealed partial class BrowsePage : Page
 
         if (Source.VersionOptions.Count > 0)
         {
-            VersionCombo.ItemsSource = Source.VersionOptions.Select(kv => new ComboBoxItem
+            _suppressVersionEvent = true;
+            try
             {
-                Content = kv.Value,
-                Tag = kv.Key,
-            }).ToList();
-            var current = VersionCombo.SelectedItem as ComboBoxItem;
-            var keep = current?.Tag;
-            VersionCombo.SelectedIndex = 0;
-            if (keep != null)
-                foreach (ComboBoxItem i in VersionCombo.Items)
-                    if (Equals(i.Tag, keep)) VersionCombo.SelectedItem = i;
-            VersionCombo.Visibility = Visibility.Visible;
+                VersionCombo.ItemsSource = Source.VersionOptions.Select(kv => new ComboBoxItem
+                {
+                    Content = kv.Value,
+                    Tag = kv.Key,
+                }).ToList();
+                var current = VersionCombo.SelectedItem as ComboBoxItem;
+                var keep = current?.Tag;
+                VersionCombo.SelectedIndex = 0;
+                if (keep != null)
+                    foreach (ComboBoxItem i in VersionCombo.Items)
+                        if (Equals(i.Tag, keep)) VersionCombo.SelectedItem = i;
+                VersionCombo.Visibility = Visibility.Visible;
+            }
+            finally
+            {
+                _suppressVersionEvent = false;
+            }
         }
         else
         {
@@ -120,14 +132,28 @@ public sealed partial class BrowsePage : Page
         CategoryCombo.ItemsSource = null;
         ApplySourceVisibility();
 
-        // 新手盒子：按当前客户端版本自动选中筛选
-        if (_source is WclboxSource && VersionCombo.Items.Count > 0)
+        // 新手盒子 / 178：按当前客户端版本自动选中筛选
+        if (_source.VersionOptions.Count > 0)
         {
             var flavor = ConfigService.Current.Flavor;
-            if (WclboxSource.FlavorToVersion.TryGetValue(flavor, out var vid))
+            int? vid = null;
+            if (_source is WclboxSource && WclboxSource.FlavorToVersion.TryGetValue(flavor, out var wv))
+                vid = wv;
+            else if (_source is Wowui178Source && Wowui178Source.FlavorToVersion.TryGetValue(flavor, out var sv))
+                vid = sv;
+
+            if (vid is > 0)
             {
-                foreach (ComboBoxItem i in VersionCombo.Items)
-                    if (Equals(i.Tag, vid)) { VersionCombo.SelectedItem = i; break; }
+                _suppressVersionEvent = true;
+                try
+                {
+                    foreach (ComboBoxItem i in VersionCombo.Items)
+                        if (Equals(i.Tag, vid)) { VersionCombo.SelectedItem = i; break; }
+                }
+                finally
+                {
+                    _suppressVersionEvent = false;
+                }
             }
         }
         await LoadCategoriesAndSearchAsync();
@@ -149,6 +175,7 @@ public sealed partial class BrowsePage : Page
 
     private async void OnVersionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_suppressVersionEvent) return;
         if (VersionCombo.IsLoaded && ListResults != null)
             await DoSearchAsync(0);
     }
@@ -171,10 +198,13 @@ public sealed partial class BrowsePage : Page
 
     private async Task DoSearchAsync(int page)
     {
+        var seq = ++_searchSeq; // 只接受最新请求的结果
         try
         {
             ShowBusy("正在搜索…");
             var result = await Source.ListAsync(page, SearchBox.Text, SelectedCategory, SelectedSort, SelectedVersionId);
+
+            if (seq != _searchSeq) return; // 已有更新的请求，丢弃本次结果
 
             _page = result.Page;
             _totalPages = result.HasMore ? page + 2 : page + 1;
@@ -187,15 +217,17 @@ public sealed partial class BrowsePage : Page
             if (!string.IsNullOrEmpty(result.Notice))
                 ShowInfo(result.Notice, InfoBarSeverity.Informational, "插件源说明");
             else if (result.Items.Count == 0)
-                ShowInfo("没有找到匹配的插件。", InfoBarSeverity.Informational);
+                ShowInfo("没有找到匹配的插件。可尝试清空关键词、更换版本筛选，或切换插件源。",
+                         InfoBarSeverity.Informational);
         }
         catch (Exception ex)
         {
+            if (seq != _searchSeq) return;
             ShowInfo($"搜索失败：{ex.Message}", InfoBarSeverity.Error);
         }
         finally
         {
-            HideBusy();
+            if (seq == _searchSeq) HideBusy();
         }
     }
 

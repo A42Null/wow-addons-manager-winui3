@@ -6,10 +6,20 @@ namespace WoWAddonManager.Services.Sources;
 /// <summary>
 /// 大脚插件站 (wowui.178.com) 源。
 /// 接入方式（无需鉴权）：
-///   列表/搜索：GET /wow/0_34676/d/{偏移}?k={关键词}（每页 10 条，SSR HTML）
+///   列表/搜索：GET /wow/0_37499/d/{偏移}?k={关键词}（每页 10 条，SSR HTML）
 ///   详情：GET /ui/{id} —— 页面内嵌 JS 数组 var resp = [{file_id, file_name, version, update_time, main_game_version}, ...]
 ///         首条为最新文件；末条时间为首次发布日期
 ///   下载：GET /down/{ui_id}/{file_id}/{file_name}（application/zip 直链）
+///
+/// 站点改版说明：列表条目结构为
+///   &lt;div class="item"&gt;&lt;div class="box"&gt;
+///     &lt;span class="pic"&gt;&lt;img src="/data/wow/{id}/ui_logo.jpg"&gt;&lt;/span&gt;
+///     &lt;h2 class="h2"&gt;&lt;a href="/ui/{id}"&gt;名称&lt;/a&gt;&lt;/h2&gt;
+///     &lt;div class="other"&gt;&lt;span class="down"&gt;下载量&lt;/span&gt;&lt;span class="date"&gt;2026/11/03&lt;/span&gt;...&lt;/div&gt;
+///     &lt;div class="dig"&gt;描述&lt;/div&gt;
+///     &lt;a ... onclick="downloadui(id,fileId,'xxx.zip')"&gt;下载&lt;/a&gt;
+///   &lt;/div&gt;&lt;/div&gt;
+/// 解析按 item 块切分，避免依赖标签顺序。
 /// </summary>
 public class Wowui178Source : IAddonSource
 {
@@ -17,6 +27,8 @@ public class Wowui178Source : IAddonSource
 
     private const string Base = "https://wowui.178.com";
     private const int PageSize = 10;
+    /// <summary>全部插件分类（站点导航中的“全部插件”）。</summary>
+    private const string AllCategory = "0_37499";
 
     private class FileEntry
     {
@@ -32,19 +44,38 @@ public class Wowui178Source : IAddonSource
         var h = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
         h.DefaultRequestHeaders.UserAgent.ParseAdd(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
+        h.DefaultRequestHeaders.TryAddWithoutValidation("Accept-Language", "zh-CN,zh;q=0.9");
         return h;
     }
 
     public string Id => "wowui178";
     public string DisplayName => "大脚插件站 (178)";
     public bool SupportsCategoryAndSort => false;
-    public IReadOnlyDictionary<int, string> VersionOptions => new Dictionary<int, string>();
 
-    private static readonly System.Text.RegularExpressions.Regex ItemRx = new(
-        @"<a\s+href=""/ui/(?<id>\d+)""[^>]*>.*?<span class=""num"">\d+</span>" +
-        @"<span class=""tit"">(?<name>.*?)</span><span class=""dig"">(?<desc>.*?)</span>" +
-        @"<span class=""size"">(?<dl>[\d,]+)</span>",
-        System.Text.RegularExpressions.RegexOptions.Singleline);
+    /// <summary>版本 id 与客户端版本对应关系（与设置页 flavor 语义一致）。</summary>
+    public IReadOnlyDictionary<int, string> VersionOptions { get; } = new Dictionary<int, string>
+    {
+        [0] = "全部版本",
+        [1] = "正式服",
+        [2] = "永久60 (怀旧服)",
+        [3] = "经典旧世",
+        [4] = "熊猫人之谜",
+        [5] = "燃烧的远征 (周年)",
+        [6] = "泰坦重铸",
+    };
+
+    /// <summary>flavor 目录 → 178 版本 id（与 VersionOptions 的 key 一致）。</summary>
+    public static readonly IReadOnlyDictionary<string, int> FlavorToVersion = new Dictionary<string, int>
+    {
+        ["_retail_"] = 1,
+        ["_retail_ptr_"] = 1,
+        ["_beta_"] = 1,
+        ["_classic_era_"] = 2,
+        ["_classic_era_ptr_"] = 2,
+        ["_classic_"] = 4,
+        ["_anniversary_"] = 5,
+        ["_classic_titan_"] = 6,
+    };
 
     private static readonly System.Text.RegularExpressions.Regex RespRx = new(
         @"var\s+resp\s*=\s*(\[\{.*?\}\]);",
@@ -52,21 +83,63 @@ public class Wowui178Source : IAddonSource
 
     private async Task<string> GetPageAsync(string url)
     {
-        for (int attempt = 0; attempt < 2; attempt++)
+        Exception? last = null;
+        for (int attempt = 0; attempt < 3; attempt++)
         {
             try
             {
                 using var resp = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
                 if (resp.IsSuccessStatusCode)
-                    return await resp.Content.ReadAsStringAsync();
+                {
+                    var html = await resp.Content.ReadAsStringAsync();
+                    if (html.Length > 0) return html;
+                }
+                else
+                {
+                    last = new HttpRequestException($"HTTP {(int)resp.StatusCode}");
+                }
             }
-            catch { }
-            await Task.Delay(500);
+            catch (Exception ex) { last = ex; }
+            await Task.Delay(500 * (attempt + 1));
         }
-        return "";
+        throw new InvalidOperationException($"大脚插件站访问失败（{last?.Message ?? "网络异常"}），请稍后重试", last);
     }
 
-    /// <summary>解析详情页内嵌文件数组。返回 (文件列表)。</summary>
+    /// <summary>解析列表页条目。</summary>
+    private static List<SourceEntry> ParseItems(string html)
+    {
+        var result = new List<SourceEntry>();
+        var blocks = html.Split(new[] { "<div class=\"item\">" }, StringSplitOptions.None);
+        for (int i = 1; i < blocks.Length; i++)
+        {
+            var b = blocks[i];
+            var idM = System.Text.RegularExpressions.Regex.Match(b, @"href=""/ui/(?<id>\d+)""");
+            if (!idM.Success) continue;
+            var id = idM.Groups["id"].Value;
+
+            var nameM = System.Text.RegularExpressions.Regex.Match(b, @"<h2 class=""h2"">\s*<a[^>]*>(?<n>.*?)</a>", System.Text.RegularExpressions.RegexOptions.Singleline);
+            var name = System.Net.WebUtility.HtmlDecode(nameM.Groups["n"].Value).Trim();
+
+            var logoM = System.Text.RegularExpressions.Regex.Match(b, @"<img src=""(?<l>/data/wow/\d+/[^""]+)""");
+            var downM = System.Text.RegularExpressions.Regex.Match(b, @"<span class=""down"">(?<v>[\d,]+)</span>");
+            var dateM = System.Text.RegularExpressions.Regex.Match(b, @"<span class=""date"">(?<v>[\d/]+)</span>");
+            var digM = System.Text.RegularExpressions.Regex.Match(b, @"<div class=""dig"">(?<v>.*?)</div>", System.Text.RegularExpressions.RegexOptions.Singleline);
+
+            result.Add(new SourceEntry
+            {
+                Id = id,
+                Name = name,
+                Summary = System.Net.WebUtility.HtmlDecode(digM.Groups["v"].Value).Trim(),
+                Author = "178 大脚",
+                Extra = downM.Success ? $"下载 {downM.Groups["v"].Value}" : "",
+                Updated = dateM.Success ? dateM.Groups["v"].Value.Replace('/', '-') : "",
+                LogoUrl = logoM.Success ? Base + logoM.Groups["l"].Value : null,
+            });
+        }
+        return result;
+    }
+
+    /// <summary>解析详情页内嵌文件数组。</summary>
     private static List<FileEntry>? ParseDetailFiles(string html)
     {
         var m = RespRx.Match(html);
@@ -81,7 +154,7 @@ public class Wowui178Source : IAddonSource
         }
     }
 
-    private async Task<SourceEntry?> EnrichAsync(SourceEntry entry)
+    private async Task<SourceEntry> EnrichAsync(SourceEntry entry)
     {
         try
         {
@@ -91,50 +164,97 @@ public class Wowui178Source : IAddonSource
             {
                 var latest = files[0];
                 entry.Version = string.IsNullOrWhiteSpace(latest.version) ? latest.file_name : latest.version;
-                entry.Updated = latest.update_time;
+                entry.Updated = FormatDate(latest.update_time);
                 entry.GameVersions = latest.main_game_version;
-                entry.FirstReleased = files[^1].update_time; // 最早一条 = 首次发布
+                entry.FirstReleased = FormatDate(files[^1].update_time); // 最早一条 = 首次发布
             }
         }
         catch { /* 详情失败不阻塞列表 */ }
         return entry;
     }
 
+    private static string FormatDate(string s) =>
+        string.IsNullOrWhiteSpace(s) ? "" : s.Split(' ')[0].Replace('/', '-');
+
+    /// <summary>
+    /// 依据插件名前缀与适配游戏版本推断所属客户端版本。
+    /// 返回 VersionOptions 中的 id；0 = 无法判定（视为通用，始终保留）。
+    /// </summary>
+    public static int GuessClientVersion(string name, string mainGameVersion)
+    {
+        var n = name.TrimStart();
+        if (n.StartsWith("["))
+        {
+            var end = n.IndexOf(']');
+            if (end > 0)
+            {
+                var tag = n[1..end];
+                if (tag.Contains("怀旧服")) return 2;      // 永久60
+                if (tag.Contains("经典旧世")) return 3;
+                if (tag.Contains("熊猫人")) return 4;
+                if (tag.Contains("燃烧") || tag.Contains("周年") || tag.Contains("TBC")) return 5;
+                if (tag.Contains("泰坦") || tag.Contains("时光服")) return 6;
+            }
+        }
+
+        // 无前缀：依据适配的游戏版本号主版本判断
+        var mgv = mainGameVersion.Trim();
+        if (mgv.Length > 0)
+        {
+            var major = mgv.Split('.')[0];
+            if (int.TryParse(major, out var m))
+            {
+                return m switch
+                {
+                    1 => 2,      // 1.13~1.15 永久60
+                    2 => 5,      // 2.x TBC
+                    3 => 6,      // 3.8x 泰坦
+                    4 or 5 => 4, // 4.x/5.x 熊猫人
+                    >= 10 => 1,  // 10.x/11.x/12.x 正式服
+                    _ => 0,
+                };
+            }
+        }
+        return 0;
+    }
+
     public async Task<SourceResult> ListAsync(int page, string? keyword, int? categoryId, int sortField, int? versionId)
     {
         var offset = page * PageSize;
-        var url = $"{Base}/wow/0_34676/d/{offset}";
+        var url = $"{Base}/wow/{AllCategory}/d/{offset}";
         if (!string.IsNullOrWhiteSpace(keyword))
             url += $"?k={Uri.EscapeDataString(keyword.Trim())}";
 
         var html = await GetPageAsync(url);
-        if (html.Length == 0)
-            throw new InvalidOperationException("大脚插件站暂时无法访问（可能被限流），请稍后重试");
 
-        var items = new List<SourceEntry>();
-        foreach (System.Text.RegularExpressions.Match m in ItemRx.Matches(html))
+        var raw = ParseItems(html);
+        var hasMore = raw.Count >= PageSize;
+
+        // 补齐版本号 / 首次发布 / 适配游戏版本（每页 10 条，并行）
+        if (raw.Count > 0)
+            await Task.WhenAll(raw.Select(EnrichAsync).ToArray());
+
+        var items = raw.Where(i => !SourceFilter.IsBlocked(i.Name)).ToList();
+
+        // 版本筛选（宽松：无法判定的条目保留）
+        string? notice = null;
+        if (versionId is > 0)
         {
-            var name = System.Net.WebUtility.HtmlDecode(m.Groups["name"].Value).Trim();
-            if (SourceFilter.IsBlocked(name)) continue; // 过滤违规插件
-            items.Add(new SourceEntry
+            var filtered = items.Where(i =>
             {
-                Id = m.Groups["id"].Value,
-                Name = name,
-                Summary = System.Net.WebUtility.HtmlDecode(m.Groups["desc"].Value).Trim(),
-                Author = "178 大脚",
-                Extra = $"下载 {m.Groups["dl"].Value}",
-            });
+                var v = GuessClientVersion(i.Name, i.GameVersions);
+                return v == 0 || v == versionId; // 0 = 无法判定，宽松保留
+            }).ToList();
+
+            if (filtered.Count == 0 && items.Count > 0)
+            {
+                notice = "该版本下没有匹配的插件，已显示全部版本的插件。";
+                filtered = items;
+            }
+            items = filtered;
         }
 
-        var hasMore = items.Count >= PageSize;
-        if (items.Count > 0)
-        {
-            // 并行补齐版本号 / 更新时间 / 首次发布 / 适配游戏版本（每页 10 条）
-            var tasks = items.Select(EnrichAsync).ToArray();
-            await Task.WhenAll(tasks);
-        }
-
-        return new SourceResult { Page = page, HasMore = hasMore, Items = items };
+        return new SourceResult { Page = page, HasMore = hasMore, Items = items, Notice = notice };
     }
 
     public async Task<SourceDownload> ResolveDownloadAsync(SourceEntry entry)

@@ -16,7 +16,8 @@ public class WclboxSource : IAddonSource
 
     private const string Base = "https://www.wclbox.com";
     private const int PageSize = 30;
-    private const int SearchScanPages = 8;
+    /// <summary>关键词搜索需客户端过滤，站点单版本条目可达数百，扫描 20 页（600 条）。</summary>
+    private const int SearchScanPages = 20;
 
     public string Id => "wclbox";
     public string DisplayName => "新手盒子";
@@ -77,8 +78,9 @@ public class WclboxSource : IAddonSource
 
     private static async Task<string> GetPageAsync(string url)
     {
-        // 站点偶发 302/限流，多重试几次
-        for (int attempt = 0; attempt < 3; attempt++)
+        // 站点偶发 302/限流/网络抖动，多重试几次；全部失败则抛出明确错误（不再静默返回空）
+        Exception? last = null;
+        for (int attempt = 0; attempt < 4; attempt++)
         {
             try
             {
@@ -88,45 +90,85 @@ public class WclboxSource : IAddonSource
                     var html = await resp.Content.ReadAsStringAsync();
                     if (html.Contains("PluginItem") || html.Contains("ListItem"))
                         return html;
+                    last = new InvalidOperationException("返回内容中没有插件数据（可能被限流或跳转）");
+                }
+                else
+                {
+                    last = new HttpRequestException($"HTTP {(int)resp.StatusCode}");
                 }
             }
-            catch { }
+            catch (Exception ex) { last = ex; }
             await Task.Delay(600 * (attempt + 1));
         }
-        return "";
+        throw new InvalidOperationException($"新手盒子访问失败（{last?.Message ?? "网络异常"}），请稍后重试或切换插件源", last);
     }
 
     public async Task<SourceResult> ListAsync(int page, string? keyword, int? categoryId, int sortField, int? versionId)
     {
         var items = new List<SourceEntry>();
+        string? notice = null;
 
         if (!string.IsNullOrWhiteSpace(keyword))
         {
-            // 搜索：扫描前 N 页后本地过滤
-            var seen = new HashSet<string>();
-            for (int pn = 1; pn <= SearchScanPages; pn++)
+            // 搜索：站点无服务端关键词搜索，扫描多页后在本地过滤
+            items = await SearchAsync(keyword, versionId);
+
+            if (items.Count == 0 && versionId is > 0)
             {
-                var html = await GetPageAsync(BuildUrl(versionId, pn));
-                foreach (var it in ParseItemList(html))
+                // 指定版本下没有命中 → 回退到全部版本再搜一次
+                var all = await SearchAsync(keyword, null);
+                if (all.Count > 0)
                 {
-                    if (SourceFilter.IsBlocked(it.Name)) continue;
-                    if (seen.Add(it.Id) &&
-                        it.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase))
-                        items.Add(it);
+                    items = all;
+                    notice = "当前筛选版本下没有匹配结果，已在全部版本中搜索。";
                 }
-                if (html.Length == 0) break;
             }
-            return new SourceResult { Page = 0, HasMore = false, Items = items };
+
+            return new SourceResult { Page = 0, HasMore = false, Items = items, Notice = notice };
         }
 
         var html1 = await GetPageAsync(BuildUrl(versionId, page + 1));
         items = ParseItemList(html1).Where(i => !SourceFilter.IsBlocked(i.Name)).ToList();
+
+        if (items.Count == 0 && versionId is > 0)
+        {
+            // 该版本本页为空 → 回退全部版本，避免误报“没有找到匹配的插件”
+            var htmlAll = await GetPageAsync(BuildUrl(null, page + 1));
+            var all = ParseItemList(htmlAll).Where(i => !SourceFilter.IsBlocked(i.Name)).ToList();
+            if (all.Count > 0)
+            {
+                items = all;
+                notice = "当前筛选版本在该页没有插件，已显示全部版本的内容。";
+            }
+        }
+
         return new SourceResult
         {
             Page = page,
             HasMore = items.Count >= PageSize,
             Items = items,
+            Notice = notice,
         };
+    }
+
+    private async Task<List<SourceEntry>> SearchAsync(string keyword, int? versionId)
+    {
+        var result = new List<SourceEntry>();
+        var seen = new HashSet<string>();
+        for (int pn = 1; pn <= SearchScanPages; pn++)
+        {
+            var html = await GetPageAsync(BuildUrl(versionId, pn));
+            var list = ParseItemList(html);
+            foreach (var it in list)
+            {
+                if (SourceFilter.IsBlocked(it.Name)) continue;
+                if (seen.Add(it.Id) &&
+                    it.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                    result.Add(it);
+            }
+            if (list.Count < PageSize) break; // 已到最后一页
+        }
+        return result;
     }
 
     private static string BuildUrl(int? versionId, int pn)

@@ -67,21 +67,22 @@ jobs:
           gh release create dev-build --repo ${{ github.repository }} --title "开发构建 (dev)" --notes "main 分支最新自动构建，每次推送覆盖" --prerelease || true
           gh release upload dev-build WoWAddonManager-win-x64.zip --clobber --repo ${{ github.repository }}
 
-      # ---- MSI 安装包（仅 tag 构建时生成并随 Release 发布）----
+      # ---- MSI 安装包 ----
+      # 目前暂停编译：需要在仓库变量中设置 ENABLE_MSI=true 才会生成（后期调整时再启用）。
       - name: Publish self-contained output (MSI)
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && vars.ENABLE_MSI == 'true'
         run: dotnet publish src/WoWAddonManager/WoWAddonManager.csproj -c Release -r win-x64 --self-contained -p:Platform=x64 -o publish
 
       - name: Install WiX v5
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && vars.ENABLE_MSI == 'true'
         run: dotnet tool install --global wix --version 5.0.2
 
       - name: Harvest publish dir
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && vars.ENABLE_MSI == 'true'
         run: installer/harvest.ps1 -PublishDir publish -OutputPath harvest.wxs
 
       - name: Build MSI
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && vars.ENABLE_MSI == 'true'
         shell: pwsh
         run: |
           $v = $env:GITHUB_REF_NAME.TrimStart('v')
@@ -90,14 +91,14 @@ jobs:
           Get-Item *.msi
 
       - name: Upload MSI artifact
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && vars.ENABLE_MSI == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: WoWAddonManager-msi
           path: "*.msi"
 
   release:
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') && vars.ENABLE_MSI == 'true'
     needs: build
     runs-on: ubuntu-latest
     permissions:
