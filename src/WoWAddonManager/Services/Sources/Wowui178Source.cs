@@ -197,25 +197,46 @@ public class Wowui178Source : IAddonSource
             }
         }
 
-        // 无前缀：依据适配的游戏版本号主版本判断
-        var mgv = mainGameVersion.Trim();
-        if (mgv.Length > 0)
+        // 无前缀：依据适配的游戏版本号判断（可能是 "12.1.5, 12.1.7" 这样的多值列表）
+        var parts = mainGameVersion.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 0) return 0;
+        var guess = 0;
+        foreach (var p in parts)
         {
-            var major = mgv.Split('.')[0];
-            if (int.TryParse(major, out var m))
-            {
-                return m switch
-                {
-                    1 => 2,      // 1.13~1.15 永久60
-                    2 => 5,      // 2.x TBC
-                    3 => 6,      // 3.8x 泰坦
-                    4 or 5 => 4, // 4.x/5.x 熊猫人
-                    >= 10 => 1,  // 10.x/11.x/12.x 正式服
-                    _ => 0,
-                };
-            }
+            var v = GuessByGameVersion(p);
+            if (v == 0) return 0;      // 无法识别
+            if (guess == 0) guess = v;
+            else if (guess != v) return 0; // 适配多个不同版本 → 通用
         }
-        return 0;
+        return guess;
+    }
+
+    /// <summary>单个游戏版本号 → 客户端版本 id（0 = 无法识别）。</summary>
+    private static int GuessByGameVersion(string ver)
+    {
+        var seg = ver.Split('.');
+        if (seg.Length < 2) return 0;
+        if (!int.TryParse(seg[0], out var major) || !int.TryParse(seg[1], out var minor)) return 0;
+
+        if (major == 1)
+        {
+            // 经典怀旧系列：1.13=TBC周年 1.14=经典旧世 1.15=永久60(怀旧服)
+            return minor switch
+            {
+                13 => 5,
+                14 => 3,
+                15 => 2,
+                _ => 0,
+            };
+        }
+        return major switch
+        {
+            2 => 4,   // 2.5 熊猫人
+            3 => minor >= 8 ? 6 : 5, // 3.8 泰坦 / 3.4 TBC
+            4 or 5 => 4, // 4.4 / 5.5 熊猫人
+            >= 10 => 1, // 10.x / 11.x / 12.x 正式服
+            _ => 0,
+        };
     }
 
     public async Task<SourceResult> ListAsync(int page, string? keyword, int? categoryId, int sortField, int? versionId)

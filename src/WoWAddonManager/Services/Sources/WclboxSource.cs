@@ -58,12 +58,16 @@ public class WclboxSource : IAddonSource
         return h;
     }
 
-    /// <summary>从 SSR 页面 JSON-LD 中解析插件条目。</summary>
+    /// <summary>
+    /// 从 SSR 页面 JSON-LD 中解析插件条目。
+    /// 注意：非默认版本的条目 URL 形如 ".../PluginItem/15714?version=2"，
+    /// 因此不能要求 URL 以 "/PluginItem/{id}" 结尾（否则只有默认版本能解析出结果）。
+    /// </summary>
     private static List<SourceEntry> ParseItemList(string html)
     {
         var result = new List<SourceEntry>();
         var rx = new System.Text.RegularExpressions.Regex(
-            @"\{""@type"":""ListItem"",""position"":\d+,""name"":""(?<name>(?:[^""\\]|\\.)*)"",""url"":""(?<url>[^""]*?/PluginItem/(?<id>\d+))""\}");
+            @"\{""@type"":""ListItem"",""position"":\d+,""name"":""(?<name>(?:[^""\\]|\\.)*)"",""url"":""[^""]*?/PluginItem/(?<id>\d+)(?:\?[^""]*)?""\}");
         foreach (System.Text.RegularExpressions.Match m in rx.Matches(html))
         {
             var name = System.Text.RegularExpressions.Regex.Unescape(m.Groups["name"].Value);
