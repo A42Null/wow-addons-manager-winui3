@@ -1,6 +1,0 @@
-﻿E:\GitHub\wow-addons-manager-winui3\WoW WinUI3 Addons Manager-backups\2026_11_11_10_30_54.aip_backup
-E:\GitHub\wow-addons-manager-winui3\WoW WinUI3 Addons Manager-backups\2026_11_11_10_30_58.aip_backup
-E:\GitHub\wow-addons-manager-winui3\WoW WinUI3 Addons Manager-backups\2026_11_11_10_31_30.aip_backup
-E:\GitHub\wow-addons-manager-winui3\WoW WinUI3 Addons Manager-backups\2026_11_11_10_35_25.aip_backup
-E:\GitHub\wow-addons-manager-winui3\WoW WinUI3 Addons Manager-backups\2026_11_11_10_37_30.aip_backup
-E:\GitHub\wow-addons-manager-winui3\WoW WinUI3 Addons Manager-backups\2026_11_13_10_02_19.aip_backup

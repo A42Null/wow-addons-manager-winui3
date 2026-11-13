@@ -12,3 +12,6 @@ _*
 *-SetupFiles/
 *.aip.orig
 harvest.wxs
+Prerequisites/
+*-backups/
+*-cache/
