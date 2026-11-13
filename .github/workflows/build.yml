@@ -171,10 +171,34 @@ jobs:
             -d "{\"tag_name\":\"${TAG}\",\"name\":\"WoWAddonManager ${TAG}\",\"body\":\"魔兽世界插件管理器 ${TAG}。附件：绿色版 zip 与 MSI 安装包。\"}" \
             "${API}/-/releases")
           echo "CREATE: $(echo "$rel" | head -c 300)"
-          rel_id=$(echo "$rel" | grep -oE '"id":[0-9]+' | head -1 | grep -oE '[0-9]+' || true)
+          rel_id=$(printf '%s' "$rel" | python3 -c "
+import json,sys
+tag=sys.argv[1]
+try:
+    d=json.load(sys.stdin)
+except Exception:
+    print(''); raise SystemExit
+items = d.get('data') or d.get('content') or []
+for r in items:
+    if r.get('tag_name')==tag:
+        print(r.get('id','')); break
+" "${TAG}")
           if [ -z "${rel_id}" ]; then
+            # 已存在同名版本：列出 release 并按 tag 复用
             rel=$(curl -s -H "$AUTH" -H "Accept: application/json" "${API}/-/releases?per_page=50")
-            rel_id=$(echo "$rel" | tr '{' '\n' | grep "\"tag_name\":\"${TAG}\"" | grep -oE '"id":[0-9]+' | head -1 | grep -oE '[0-9]+' || true)
+            echo "LIST(first 200): $(echo "$rel" | head -c 200)"
+            rel_id=$(printf '%s' "$rel" | python3 -c "
+import json,sys
+tag=sys.argv[1]
+try:
+    d=json.load(sys.stdin)
+except Exception:
+    print(''); raise SystemExit
+items = d.get('data') or d.get('content') or []
+for r in items:
+    if r.get('tag_name')==tag:
+        print(r.get('id','')); break
+" "${TAG}")
             echo "reused existing release"
           fi
           echo "release_id=${rel_id}"
@@ -188,7 +212,26 @@ jobs:
               -d "{\"asset_name\":\"${name}\"}" \
               "${API}/-/releases/${rel_id}/-/asset-upload-url?overwrite=true")
             echo "UPLOAD-URL[${name}]: $(echo "$up" | head -c 400)"
-            url=$(echo "$up" | grep -oE '"upload_url":"[^"]+"' | head -1 | cut -d'"' -f4 || true)
+            url=$(printf '%s' "$up" | python3 -c "
+import json,sys
+try:
+    d=json.load(sys.stdin)
+except Exception:
+    print(''); raise SystemExit
+def find(o):
+    if isinstance(o,dict):
+        u=o.get('upload_url')
+        if isinstance(u,str) and u: return u
+        for v in o.values():
+            r=find(v)
+            if r: return r
+    elif isinstance(o,list):
+        for v in o:
+            r=find(v)
+            if r: return r
+    return ''
+print(find(d))
+")
             if [ -z "${url}" ]; then echo "no upload url for ${name}"; return 1; fi
             curl -s -X PUT -H "$AUTH" --upload-file "${file}" "${url}" | head -c 200; echo
             conf=$(curl -s -X POST -H "$AUTH" -H "Content-Type: application/json" -H "Accept: application/json" \
