@@ -39,13 +39,23 @@ main:
           script: |
             VERSION=$(git show origin/main:src/WoWAddonManager/WoWAddonManager.csproj | grep -o '<Version>[^<]*</Version>' | head -1 | sed 's/<[^>]*>//g')
             echo "VERSION=$VERSION"
-            # 通过 GitHub Releases API 取资产直链（比解析 HTML 稳定）
-            REL_JSON=$(curl -sL --max-time 120 --retry 3 "https://api.github.com/repos/A42Null/wow-addons-manager-winui3/releases/tags/dev-build" || true)
-            echo "$REL_JSON" | head -c 200; echo
-            ZIP_URL=$(echo "$REL_JSON" | grep -oE '"browser_download_url":"[^"]+\.zip"' | head -1 | cut -d'"' -f4)
-            MSI_URL=$(echo "$REL_JSON" | grep -oE '"browser_download_url":"[^"]+\.msi"' | head -1 | cut -d'"' -f4)
+            # 固定命名规则（CI 生成）：zip 与 MSI 名称固定，无需解析页面/API
+            BASE="https://github.com/A42Null/wow-addons-manager-winui3/releases/download/dev-build"
+            ZIP_URL="$BASE/WoWAddonManager-win-x64.zip"
+            MSI_URL="$BASE/WoWAddonManager-${VERSION}-x64.msi"
             echo "ZIP_URL=$ZIP_URL"
             echo "MSI_URL=$MSI_URL"
+            # 兜底：若固定地址不可用，再用 Releases API 解析
+            if ! curl -sIL --max-time 90 "$MSI_URL" | grep -qi "200"; then
+              echo "固定 MSI 地址不可用，尝试 Releases API"
+              REL_JSON=$(curl -sL --max-time 120 "https://api.github.com/repos/A42Null/wow-addons-manager-winui3/releases/tags/dev-build" || true)
+              A_ZIP=$(echo "$REL_JSON" | grep -oE '"browser_download_url":"[^"]+\.zip"' | head -1 | cut -d'"' -f4)
+              A_MSI=$(echo "$REL_JSON" | grep -oE '"browser_download_url":"[^"]+\.msi"' | head -1 | cut -d'"' -f4)
+              [ -n "$A_ZIP" ] && ZIP_URL="$A_ZIP"
+              [ -n "$A_MSI" ] && MSI_URL="$A_MSI"
+              echo "fallback ZIP_URL=$ZIP_URL"
+              echo "fallback MSI_URL=$MSI_URL"
+            fi
             printf '%s\n' "$ZIP_URL" > /tmp/zip_url.txt
             printf '%s\n' "$MSI_URL" > /tmp/msi_url.txt
             printf '%s\n' "$VERSION" > /tmp/version.txt
