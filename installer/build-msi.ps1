@@ -1,25 +1,29 @@
 <#
 .SYNOPSIS
-    构建 MSI 安装包。
+    Build the MSI installer.
 
 .DESCRIPTION
-    优先使用 Advanced Installer（读取仓库根目录的 .aip 工程，可用 /build 命令行构建）；
-    若本机没有 Advanced Installer，则回退到 WiX v5（installer/harvest.ps1 + Product.wxs）。
+    Priority 1: Advanced Installer (reads the .aip project in the repo root, built via /build).
+    Fallback  : WiX v5 (installer/harvest.ps1 + installer/Product.wxs).
 
-    注意：Advanced Installer 工程中的文件源路径相对于 .aip 所在目录，
-    因此必须把待打包的发布目录放到 <repo>\versions\WoWAddonManager-win-x64。
+    IMPORTANT: This script is intentionally ASCII-only (no BOM) so that it runs
+    correctly under Windows PowerShell 5.1 as well as PowerShell 7.
+
+    The Advanced Installer project references files with paths relative to the
+    repository root, therefore the publish output must be placed at
+    <repo>\versions\WoWAddonManager-win-x64.
 
 .PARAMETER Version
-    版本号（默认 0.4.1），用于输出文件名。
+    Version string, e.g. 0.4.1 (used in the output file name).
 
 .PARAMETER PublishDir
-    待打包的发布目录（默认 versions\WoWAddonManager-win-x64）。
+    Directory with the files to package (default: versions\WoWAddonManager-win-x64).
 
 .PARAMETER OutputDir
-    MSI 输出目录（默认 versions）。
+    Where the MSI is written (default: versions).
 
 .PARAMETER ForceWix
-    强制使用 WiX，忽略已安装的 Advanced Installer。
+    Skip Advanced Installer and always use the WiX fallback.
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File installer/build-msi.ps1 -Version 0.4.1
@@ -41,27 +45,26 @@ try {
     $outMsi = Join-Path $repoRoot (Join-Path $OutputDir $msiName)
 
     if (-not (Test-Path $PublishDir)) {
-        throw "发布目录不存在: $PublishDir"
+        throw "Publish directory not found: $PublishDir"
     }
 
-    # ---------- 1) Advanced Installer ----------
     function Find-AdvancedInstaller {
-        $candidates = @()
+        $dirs = @()
         try {
             $keys = @(
                 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
                 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
             )
             foreach ($k in $keys) {
-                $candidates += Get-ItemProperty $k -ErrorAction SilentlyContinue |
+                $dirs += Get-ItemProperty $k -ErrorAction SilentlyContinue |
                     Where-Object { $_.DisplayName -like 'Advanced Installer*' } |
                     Select-Object -ExpandProperty InstallLocation -ErrorAction SilentlyContinue
             }
         } catch { }
-        foreach ($dir in $candidates) {
-            if (-not $dir) { continue }
+        foreach ($d in $dirs) {
+            if (-not $d) { continue }
             foreach ($rel in @('bin\x86\AdvancedInstaller.com', 'bin\x64\AdvancedInstaller.com')) {
-                $p = Join-Path $dir $rel
+                $p = Join-Path $d $rel
                 if (Test-Path $p) { return $p }
             }
         }
@@ -71,46 +74,52 @@ try {
     if (-not $ForceWix -and $aip) {
         $ai = Find-AdvancedInstaller
         if ($ai) {
-            Write-Host "[MSI] 使用 Advanced Installer: $ai"
+            Write-Host "[MSI] Using Advanced Installer: $ai"
             & $ai /build $aip.FullName
             if ($LASTEXITCODE -ne 0) {
-                throw "Advanced Installer 构建失败 (exit=$LASTEXITCODE)"
+                Write-Host "[MSI] Advanced Installer build failed (exit=$LASTEXITCODE)"
+            } else {
+                $setupDir = Join-Path $repoRoot ($aip.BaseName + "-SetupFiles")
+                $built = Get-ChildItem -Path $setupDir -Filter "*.msi" -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($built) {
+                    New-Item -ItemType Directory -Force -Path (Join-Path $repoRoot $OutputDir) | Out-Null
+                    Copy-Item $built.FullName $outMsi -Force
+                    Write-Host "[MSI] Generated: $outMsi"
+                    Get-Item $outMsi | Select-Object Name, Length, LastWriteTime
+                    exit 0
+                }
+                Write-Host "[MSI] No MSI produced in $setupDir"
             }
-            $setupDir = Join-Path $repoRoot ($aip.BaseName + "-SetupFiles")
-            $built = Get-ChildItem -Path $setupDir -Filter "*.msi" -ErrorAction SilentlyContinue | Select-Object -First 1
-            if (-not $built) { throw "Advanced Installer 未生成 MSI（$setupDir）" }
-            New-Item -ItemType Directory -Force -Path (Join-Path $repoRoot $OutputDir) | Out-Null
-            Copy-Item $built.FullName $outMsi -Force
-            Write-Host "[MSI] 已生成: $outMsi"
-            Get-Item $outMsi | Select-Object Name, Length, LastWriteTime
-            exit 0
+            Write-Host "[MSI] Falling back to WiX"
+        } else {
+            Write-Host "[MSI] Advanced Installer not found, using WiX fallback"
         }
-        Write-Host "[MSI] 未检测到 Advanced Installer，改用 WiX 回退方案"
     }
 
-    # ---------- 2) WiX v5 回退 ----------
-    if (-not (Test-Path (Join-Path $repoRoot "installer\Product.wxs"))) {
-        throw "缺少 installer\Product.wxs，无法使用 WiX 回退方案"
+    # ---- WiX v5 fallback ----
+    $wxs = Join-Path $repoRoot "installer\Product.wxs"
+    if (-not (Test-Path $wxs)) {
+        throw "Missing $wxs, cannot use the WiX fallback"
     }
-    Write-Host "[MSI] 使用 WiX v5 构建"
+    Write-Host "[MSI] Building with WiX v5"
     & powershell -ExecutionPolicy Bypass -File (Join-Path $repoRoot "installer\harvest.ps1") `
         -PublishDir $PublishDir -OutputPath (Join-Path $repoRoot "harvest.wxs")
-    if ($LASTEXITCODE -ne 0) { throw "harvest.ps1 失败" }
+    if ($LASTEXITCODE -ne 0) { throw "harvest.ps1 failed" }
 
     $wix = Get-Command wix -ErrorAction SilentlyContinue
     if (-not $wix) {
-        Write-Host "[MSI] 安装 WiX v5 ..."
+        Write-Host "[MSI] Installing WiX v5 ..."
         & dotnet tool install --global wix --version 5.0.2
         $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" +
                      [System.Environment]::GetEnvironmentVariable("PATH", "User")
         $wix = Get-Command wix -ErrorAction SilentlyContinue
     }
-    if (-not $wix) { throw "找不到 wix 命令" }
+    if (-not $wix) { throw "wix command not found" }
 
     & wix build -arch x64 -define "PublishDir=$PublishDir" -define "MsiVersion=$Version" `
-        -out $outMsi (Join-Path $repoRoot "installer\Product.wxs") (Join-Path $repoRoot "harvest.wxs")
-    if ($LASTEXITCODE -ne 0) { throw "wix build 失败" }
-    Write-Host "[MSI] 已生成: $outMsi"
+        -out $outMsi $wxs (Join-Path $repoRoot "harvest.wxs")
+    if ($LASTEXITCODE -ne 0) { throw "wix build failed" }
+    Write-Host "[MSI] Generated: $outMsi"
     Get-Item $outMsi | Select-Object Name, Length, LastWriteTime
 }
 finally {

@@ -42,17 +42,21 @@ jobs:
           path: build.binlog
           if-no-files-found: ignore
 
+      - name: Publish self-contained output (MSBuild Publish target)
+        run: msbuild src/WoWAddonManager/WoWAddonManager.csproj /restore /p:Configuration=Release /p:Platform=x64 /p:RuntimeIdentifier=win-x64 /p:PublishDir=publish /t:Publish
+
       - name: Zip output
         shell: pwsh
         run: |
-          $out = "src/WoWAddonManager/bin/x64/Release/net8.0-windows10.0.19041.0/win-x64"
-          if (-not (Test-Path $out)) {
+          $out = "publish"
+          if (-not (Test-Path "$out/WoWAddonManager.exe")) {
             $exe = Get-ChildItem "src/WoWAddonManager/bin" -Recurse -Filter "WoWAddonManager.exe" | Select-Object -First 1
             $out = $exe.DirectoryName
           }
           Write-Host "Output dir: $out"
           Compress-Archive -Path "$out/*" -DestinationPath "WoWAddonManager-win-x64.zip" -Force
           # Advanced Installer 工程(.aip)以 versions\WoWAddonManager-win-x64 为文件源
+          if (Test-Path "versions\WoWAddonManager-win-x64") { Remove-Item "versions\WoWAddonManager-win-x64" -Recurse -Force }
           New-Item -ItemType Directory -Force -Path "versions\WoWAddonManager-win-x64" | Out-Null
           Copy-Item "$out/*" "versions\WoWAddonManager-win-x64" -Recurse -Force
 

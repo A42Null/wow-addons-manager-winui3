@@ -2,7 +2,8 @@ param(
     [Parameter(Mandatory = $true)][string]$PublishDir,
     [Parameter(Mandatory = $true)][string]$OutputPath
 )
-# 将 publish 输出目录生成 WiX v4/v5 harvest 清单（heat 在 WiX v5 CLI 中已移除）
+# Generate a WiX v4/v5 harvest manifest from the publish directory.
+# (The "heat" command was removed from the WiX v5 CLI.)
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path $PublishDir).Path.Replace('/', '\')
 $sb = [System.Text.StringBuilder]::new()
