@@ -45,39 +45,47 @@ main:
             BASE="https://github.com/A42Null/wow-addons-manager-winui3/releases/download/dev-build"
             curl -sL --max-time 900 -o /tmp/wam.zip "$BASE/WoWAddonManager-win-x64.zip"
             test $(stat -c%s /tmp/wam.zip) -gt 1000000 || { echo "zip 下载异常"; exit 1; }
-            MSI_URL=$(curl -s --max-time 30 "$BASE" | grep -oE 'WoWAddonManager-[0-9.]+-x64\.msi' | head -1 || true)
+            # 注意：GitHub 会 302，必须加 -L 才能拿到资产列表页
+            MSI_URL=$(curl -sL --max-time 60 "$BASE" | grep -oE 'WoWAddonManager-[0-9.]+-x64\.msi' | head -1 || true)
+            echo "MSI_URL=$MSI_URL"
             if [ -n "$MSI_URL" ]; then
               curl -sL --max-time 900 -o /tmp/wam.msi "$BASE/$MSI_URL"
-              test $(stat -c%s /tmp/wam.msi) -gt 1000000 || { echo "MSI 下载异常"; rm -f /tmp/wam.msi; }
+              if [ ! -s /tmp/wam.msi ] || [ $(stat -c%s /tmp/wam.msi) -lt 1000000 ]; then
+                echo "MSI 下载异常"; rm -f /tmp/wam.msi
+              fi
             fi
             ls -la /tmp/wam.zip /tmp/wam.msi 2>/dev/null || true
             git config user.email "ci@cnb.cool"
             git config user.name "cnb-ci"
-            if git ls-remote --exit-code --heads origin dist >/dev/null 2>&1; then
-              git fetch origin dist && git checkout -B dist FETCH_HEAD
-            else
-              git checkout -B dist
-            fi
+            # dist 分支始终基于最新的 main 重建
+            git fetch origin main && git checkout -B dist origin/main
             mkdir -p build
             cp /tmp/wam.zip build/WoWAddonManager-win-x64.zip
             if [ -f /tmp/wam.msi ]; then cp /tmp/wam.msi "build/${MSI_URL}"; fi
             git add -A build
             git commit -m "artifact: $(date '+%F %T') 来自 GitHub Actions 的构建产物" || echo "无变化"
             git push origin dist
+            # 回到 main，避免后续 stage 读到旧代码
+            git checkout main
 
         - name: 创建 CNB Release 并上传资产（zip + MSI）
           script: |
             API="https://api.cnb.cool/A42Null/wow-addons-manager-winui3"
             AUTH="Authorization: Bearer ${CNB_TOKEN:-${CNB_ACCESS_TOKEN}}"
-            VERSION=$(git show HEAD:src/WoWAddonManager/WoWAddonManager.csproj | grep -o '<Version>[^<]*</Version>' | head -1 | sed 's/<[^>]*>//g')
+            # 版本号一律从 origin/main 的 csproj 读取（不受当前 HEAD 影响）
+            VERSION=$(git show origin/main:src/WoWAddonManager/WoWAddonManager.csproj | grep -o '<Version>[^<]*</Version>' | head -1 | sed 's/<[^>]*>//g')
+            if [ -z "$VERSION" ]; then
+              VERSION=$(curl -sL --max-time 60 "https://github.com/A42Null/wow-addons-manager-winui3/releases/download/dev-build" | grep -oE 'WoWAddonManager-[0-9.]+-x64\.msi' | head -1 | sed 's/WoWAddonManager-//; s/-x64\.msi//')
+            fi
             TAG="v${VERSION}"
             echo "token present: $([ -n "${CNB_TOKEN:-}" ] && echo yes || echo no)"
+            echo "VERSION=$VERSION"
             echo "tag: $TAG"
 
             # 确保 CNB 仓库存在该 tag
             git config user.email "ci@cnb.cool"
             git config user.name "cnb-ci"
-            git checkout -B release-$TAG main 2>/dev/null || git checkout -B release-$TAG
+            git checkout -B "release-$TAG" origin/main 2>/dev/null || git checkout -B "release-$TAG"
             git tag -f "$TAG" >/dev/null 2>&1 || true
             git push origin "$TAG" || echo "tag 推送失败（继续尝试创建 release）"
 
@@ -87,22 +95,23 @@ main:
             echo "CREATE: $(echo "$rel" | head -c 300)"
             rel_id=$(echo "$rel" | grep -oE '"id":[0-9]+' | head -1 | grep -oE '[0-9]+')
             if [ -z "$rel_id" ]; then
-              rel=$(curl -s -H "$AUTH" -H "Accept: application/json" "$API/-/releases?per_page=10")
+              # 已存在同名版本时，复用现有 release
+              rel=$(curl -s -H "$AUTH" -H "Accept: application/json" "$API/-/releases?per_page=20")
               echo "LIST: $(echo "$rel" | head -c 300)"
-              rel_id=$(echo "$rel" | grep -oE '"id":[0-9]+' | head -1 | grep -oE '[0-9]+')
+              rel_id=$(echo "$rel" | tr '{' '\n' | grep "\"tag_name\":\"$TAG\"" | grep -oE '"id":[0-9]+' | head -1 | grep -oE '[0-9]+')
             fi
             echo "release_id=$rel_id"
             if [ -z "$rel_id" ]; then echo "无法获得 release id，跳过附件上传"; exit 0; fi
 
             upload_asset() {
               name=$1; file=$2
-              [ -f "$file" ] || { echo "跳过缺失文件 $file"; return 0; }
+              if [ ! -f "$file" ]; then echo "skip missing file: $file"; return 0; fi
               up=$(curl -s -X POST -H "$AUTH" -H "Content-Type: application/json" -H "Accept: application/json" \
                 -d "{\"asset_name\":\"$name\"}" \
                 "$API/-/releases/$rel_id/-/asset-upload-url?overwrite=true")
               echo "UPLOAD-URL[$name]: $(echo "$up" | head -c 400)"
               url=$(echo "$up" | grep -oE '"upload_url":"[^"]+"' | head -1 | cut -d'"' -f4)
-              if [ -z "$url" ]; then echo "未获得上传地址，跳过 $name"; return 0; fi
+              if [ -z "$url" ]; then echo "no upload url for $name"; return 0; fi
               curl -s -X PUT -H "$AUTH" --upload-file "$file" "$url" | head -c 200; echo
               conf=$(curl -s -X POST -H "$AUTH" -H "Content-Type: application/json" -H "Accept: application/json" \
                 -d "{\"verify_url\":\"$up\"}" \
@@ -110,10 +119,11 @@ main:
               echo "CONFIRM[$name]: $(echo "$conf" | head -c 300)"
             }
 
-            upload_asset "WoWAddonManager-win-x64.zip" /tmp/wam.zip
-            MSI_URL=$(curl -s --max-time 30 "https://github.com/A42Null/wow-addons-manager-winui3/releases/download/dev-build" | grep -oE 'WoWAddonManager-[0-9.]+-x64\.msi' | head -1 || true)
-            [ -n "$MSI_URL" ] && upload_asset "$MSI_URL" /tmp/wam.msi
-            echo "CNB release 完成"
+            upload_asset "WoWAddonManager-win-x64.zip" /tmp/wam.zip || true
+            MSI_URL=$(curl -sL --max-time 60 "https://github.com/A42Null/wow-addons-manager-winui3/releases/download/dev-build" | grep -oE 'WoWAddonManager-[0-9.]+-x64\.msi' | head -1 || true)
+            echo "MSI asset name: $MSI_URL"
+            if [ -n "$MSI_URL" ]; then upload_asset "$MSI_URL" /tmp/wam.msi || true; fi
+            echo "CNB release done"
 
 $:
   vscode:
