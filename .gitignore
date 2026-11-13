@@ -7,3 +7,8 @@ NetEaseDD/
 .workbuddy/NetEaseDD/
 _workbuddy_tmp/
 _*
+
+# Advanced Installer 构建输出与备份
+*-SetupFiles/
+*.aip.orig
+harvest.wxs

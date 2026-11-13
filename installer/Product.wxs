@@ -1,10 +1,10 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package
-      Name="魔兽世界插件管理器 (WoWAddonManager)"
+      Name="WoW WinUI3 Addons Manager"
       Manufacturer="A42Null"
       Version="$(var.MsiVersion)"
-      UpgradeCode="8F3A2B7C-1D4E-4F6A-9B2C-3E5D6A7B8C9D"
-      Scope="perUser"
+      UpgradeCode="8DCF932F-B15E-408F-A8AD-35AFC67A4E90"
+      Scope="perMachine"
       Compressed="yes">
     <SummaryInformation Description="魔兽世界插件管理器 — 浏览/安装/更新魔兽世界插件" />
 
@@ -12,8 +12,8 @@
 
     <MajorUpgrade DowngradeErrorMessage="已安装更高版本，无法降级安装。" />
 
-    <!-- 按用户安装到 %LocalAppData%\WoWAddonManager，无需管理员权限 -->
-    <StandardDirectory Id="LocalAppDataFolder">
+    <!-- 与 Advanced Installer (.aip) 保持一致：安装到 Program Files\WoWAddonManager -->
+    <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="WoWAddonManager" />
     </StandardDirectory>
 
