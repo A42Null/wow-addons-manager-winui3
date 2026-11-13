@@ -90,87 +90,14 @@ main:
             # 回到 main，避免后续 stage 读到旧代码
             git checkout main
 
-        - name: 创建 CNB Release 并上传资产（zip + MSI）
-          script: |
-            API="https://api.cnb.cool/A42Null/wow-addons-manager-winui3"
-            AUTH="Authorization: Bearer ${CNB_TOKEN:-${CNB_ACCESS_TOKEN}}"
-            VERSION=$(cat /tmp/version.txt 2>/dev/null || true)
-            if [ -z "$VERSION" ]; then
-              VERSION=$(git show origin/main:src/WoWAddonManager/WoWAddonManager.csproj | grep -o '<Version>[^<]*</Version>' | head -1 | sed 's/<[^>]*>//g')
-            fi
-            TAG="v${VERSION}"
-            echo "token present: $([ -n "${CNB_TOKEN:-}" ] && echo yes || echo no)"
-            echo "VERSION=$VERSION"
-            echo "tag: $TAG"
-
-            # 确保 CNB 仓库存在该 tag
-            git config user.email "ci@cnb.cool"
-            git config user.name "cnb-ci"
-            git checkout -B "release-$TAG" origin/main 2>/dev/null || git checkout -B "release-$TAG"
-            git tag -f "$TAG" >/dev/null 2>&1 || true
-            git push origin "$TAG" || echo "tag 推送失败（继续尝试创建 release）"
-
-            rel=$(curl -s -X POST -H "$AUTH" -H "Content-Type: application/json" -H "Accept: application/json" \
-              -d "{\"tag_name\":\"$TAG\",\"name\":\"WoWAddonManager $TAG\",\"body\":\"魔兽世界插件管理器 $TAG。附件：绿色版 zip 与 MSI 安装包。\"}" \
-              "$API/-/releases")
-            echo "CREATE: $(echo "$rel" | head -c 300)"
-            rel_id=$(echo "$rel" | grep -oE '"id":[0-9]+' | head -1 | grep -oE '[0-9]+')
-            if [ -z "$rel_id" ]; then
-              # 已存在同名版本时，复用现有 release
-              rel=$(curl -s -H "$AUTH" -H "Accept: application/json" "$API/-/releases?per_page=20")
-              echo "LIST: $(echo "$rel" | head -c 300)"
-              rel_id=$(echo "$rel" | tr '{' '\n' | grep "\"tag_name\":\"$TAG\"" | grep -oE '"id":[0-9]+' | head -1 | grep -oE '[0-9]+')
-            fi
-            echo "release_id=$rel_id"
-            if [ -z "$rel_id" ]; then echo "无法获得 release id，跳过附件上传"; exit 0; fi
-
-            upload_asset() {
-              name=$1; file=$2
-              if [ ! -f "$file" ]; then echo "skip missing file: $file"; return 0; fi
-              up=$(curl -s -X POST -H "$AUTH" -H "Content-Type: application/json" -H "Accept: application/json" \
-                -d "{\"asset_name\":\"$name\"}" \
-                "$API/-/releases/$rel_id/-/asset-upload-url?overwrite=true")
-              echo "UPLOAD-URL[$name]: $(echo "$up" | head -c 400)"
-              url=$(echo "$up" | grep -oE '"upload_url":"[^"]+"' | head -1 | cut -d'"' -f4)
-              if [ -z "$url" ]; then echo "no upload url for $name"; return 0; fi
-              curl -s -X PUT -H "$AUTH" --upload-file "$file" "$url" | head -c 200; echo
-              conf=$(curl -s -X POST -H "$AUTH" -H "Content-Type: application/json" -H "Accept: application/json" \
-                -d "{\"verify_url\":\"$up\"}" \
-                "$API/-/releases/$rel_id/-/asset-upload-confirmation")
-              echo "CONFIRM[$name]: $(echo "$conf" | head -c 300)"
-            }
-
-            upload_asset "WoWAddonManager-win-x64.zip" /tmp/wam.zip || true
-            if [ -f /tmp/wam.msi ]; then
-              MSI_URL=$(cat /tmp/msi_url.txt 2>/dev/null || true)
-              upload_asset "$(basename "${MSI_URL:-WoWAddonManager-$VERSION-x64.msi}")" /tmp/wam.msi || true
-            fi
-            echo "CNB release done"
+        # 说明：CNB Release 的创建与资产上传已迁移到 GitHub Actions
+        # （.github/workflows/build.yml 的 publish-cnb job，使用仓库密钥 CNB_TOKEN），
+        # 此处只负责把产物收集到 dist 分支。
 
         - name: 清理错误创建的版本
           script: |
-            API="https://api.cnb.cool/A42Null/wow-addons-manager-winui3"
-            AUTH="Authorization: Bearer ${CNB_TOKEN:-${CNB_ACCESS_TOKEN}}"
-            VERSION=$(cat /tmp/version.txt 2>/dev/null || true)
-            KEEP="v${VERSION}"
-            echo "keep: $KEEP"
-            curl -s -H "$AUTH" -H "Accept: application/json" "$API/-/releases?per_page=50" > /tmp/rels.json
-            tr '{' '\n' < /tmp/rels.json | grep '"tag_name"' | \
-              sed -n 's/.*"id":\([0-9]*\).*"tag_name":"\([^"]*\)".*/\1 \2/p' | while read -r id tag; do
-                [ -z "$id" ] && continue
-                if [ "$tag" = "$KEEP" ]; then continue; fi
-                tver=${tag#v}
-                t_major=${tver%%.*}
-                # 仅清理“误建的高版本”（如 v1.0.0），保留 v0.x.x 历史版本
-                case "$t_major" in
-                  ''|*[!0-9]*) continue ;;
-                esac
-                if [ "$t_major" -ge 1 ]; then
-                  echo "delete stale release: $tag ($id)"
-                  curl -s -X DELETE -H "$AUTH" -H "Accept: application/json" "$API/-/releases/$id" | head -c 200; echo
-                fi
-              done
-            echo "cleanup done"
+            echo "版本清理由人工在 CNB 页面执行，流水线不自动删除任何版本"
+            echo "cleanup skipped by design"
 
 $:
   vscode:

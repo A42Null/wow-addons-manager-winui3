@@ -71,9 +71,14 @@ CurseForge / 大脚插件站 / 大脚整合包源的列表会自动隐藏名称�
 
 - GitHub Actions（windows-latest + VS MSBuild）：`.github/workflows/build.yml`
   - push main 自动构建并更新 `dev-build` 滚动 Release；push tag `v*` 自动发正式 Release。
-- CNB（cnb.cool）：`.cnb.yml` 流水线等待 GitHub Actions 完成后，把产物收集到 CNB 仓库 `dist` 分支（`build/WoWAddonManager-win-x64.zip`），从 CNB 即可下载。
-- CNB Runner 为 Linux，WinUI3 XAML 编译必须 Windows，故编译在 GitHub Actions，CNB 负责产物分发。
-  - 注：CNB Runner 为 Linux，WinUI3 XAML 编译必须 Windows，故实际打包在 GitHub Actions。
+  - MSI 由 **Advanced Installer**（读取仓库根目录 `WoW WinUI3 Addons Manager.aip`）构建；本机无 AI 时回退 WiX v5（`installer/build-msi.ps1`）。
+  - `publish-cnb` job：tag 构建时（或手动触发 workflow_dispatch）用仓库密钥 `CNB_TOKEN` 把 zip + MSI 发布为 CNB Release。
+- CNB（cnb.cool）：`.cnb.yml` 流水线等待 GitHub Actions 完成后，把产物收集到 CNB 仓库 `dist` 分支（`build/WoWAddonManager-win-x64.zip`、`build/WoWAddonManager-<版本>-x64.msi`），从 CNB 即可下载。
+  - CNB Runner 为 Linux，WinUI3 XAML 编译必须 Windows，故编译在 GitHub Actions，CNB 负责产物分发。
+
+## 许可证
+
+[MIT](LICENSE) — Copyright (c) 2026 A42Null
 
 ## 本地开发
 

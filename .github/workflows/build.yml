@@ -5,6 +5,11 @@ on:
     branches: [main, master]
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      cnb_version:
+        description: '要发布到 CNB 的版本号（如 0.4.1）；留空则用 tag / csproj 版本'
+        required: false
+        default: ''
 
 jobs:
   build:
@@ -106,6 +111,97 @@ jobs:
           gh release create dev-build --repo ${{ github.repository }} --title "开发构建 (dev)" --notes "main 分支最新自动构建，每次推送覆盖" --prerelease || true
           gh release upload dev-build WoWAddonManager-win-x64.zip --clobber --repo ${{ github.repository }}
           gh release upload dev-build versions/*.msi --clobber --repo ${{ github.repository }}
+
+  # 发布到 CNB（使用仓库密钥 CNB_TOKEN）：tag 构建时自动发布，也可手动触发补传附件
+  publish-cnb:
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout (for version)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Resolve version
+        id: ver2
+        shell: bash
+        run: |
+          v=$(grep -o '<Version>[^<]*</Version>' src/WoWAddonManager/WoWAddonManager.csproj | head -1 | sed 's/<[^>]*>//g')
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "version=$v"
+
+      - name: Download zip artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: WoWAddonManager-win-x64
+
+      - name: Download MSI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: WoWAddonManager-msi
+
+      - name: Publish release to CNB
+        env:
+          CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
+          CNB_REPO: A42Null/wow-addons-manager-winui3
+          INPUT_VERSION: ${{ github.event.inputs.cnb_version }}
+          REF_VERSION: ${{ steps.ver2.outputs.version }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          API="https://api.cnb.cool/${CNB_REPO}"
+          AUTH="Authorization: Bearer ${CNB_TOKEN}"
+          VERSION="${INPUT_VERSION:-${REF_VERSION}}"
+          VERSION="${VERSION#v}"
+          TAG="v${VERSION}"
+          echo "CNB repo: ${CNB_REPO}  version: ${VERSION}  tag: ${TAG}"
+
+          if [ -z "${CNB_TOKEN}" ]; then echo "CNB_TOKEN not configured"; exit 1; fi
+
+          # 1) 确保 CNB 侧存在该 tag（已存在则忽略）
+          curl -s -X POST -H "$AUTH" -H "Content-Type: application/json" -H "Accept: application/json" \
+            -d "{\"name\":\"${TAG}\",\"target\":\"main\",\"message\":\"WoWAddonManager ${TAG}\"}" \
+            "${API}/-/git/tags/${TAG}" | head -c 300; echo
+
+          # 2) 创建或复用 release
+          rel=$(curl -s -X POST -H "$AUTH" -H "Content-Type: application/json" -H "Accept: application/json" \
+            -d "{\"tag_name\":\"${TAG}\",\"name\":\"WoWAddonManager ${TAG}\",\"body\":\"魔兽世界插件管理器 ${TAG}。附件：绿色版 zip 与 MSI 安装包。\"}" \
+            "${API}/-/releases")
+          echo "CREATE: $(echo "$rel" | head -c 300)"
+          rel_id=$(echo "$rel" | grep -oE '"id":[0-9]+' | head -1 | grep -oE '[0-9]+' || true)
+          if [ -z "${rel_id}" ]; then
+            rel=$(curl -s -H "$AUTH" -H "Accept: application/json" "${API}/-/releases?per_page=50")
+            rel_id=$(echo "$rel" | tr '{' '\n' | grep "\"tag_name\":\"${TAG}\"" | grep -oE '"id":[0-9]+' | head -1 | grep -oE '[0-9]+' || true)
+            echo "reused existing release"
+          fi
+          echo "release_id=${rel_id}"
+          if [ -z "${rel_id}" ]; then echo "cannot resolve release id"; exit 1; fi
+
+          # 3) 上传资产
+          upload() {
+            name="$1"; file="$2"
+            if [ ! -f "${file}" ]; then echo "skip missing ${file}"; return 0; fi
+            up=$(curl -s -X POST -H "$AUTH" -H "Content-Type: application/json" -H "Accept: application/json" \
+              -d "{\"asset_name\":\"${name}\"}" \
+              "${API}/-/releases/${rel_id}/-/asset-upload-url?overwrite=true")
+            echo "UPLOAD-URL[${name}]: $(echo "$up" | head -c 400)"
+            url=$(echo "$up" | grep -oE '"upload_url":"[^"]+"' | head -1 | cut -d'"' -f4 || true)
+            if [ -z "${url}" ]; then echo "no upload url for ${name}"; return 1; fi
+            curl -s -X PUT -H "$AUTH" --upload-file "${file}" "${url}" | head -c 200; echo
+            conf=$(curl -s -X POST -H "$AUTH" -H "Content-Type: application/json" -H "Accept: application/json" \
+              -d "{\"verify_url\":\"${up}\"}" \
+              "${API}/-/releases/${rel_id}/-/asset-upload-confirmation")
+            echo "CONFIRM[${name}]: $(echo "$conf" | head -c 300)"
+          }
+          upload "WoWAddonManager-win-x64.zip" "WoWAddonManager-win-x64.zip" || true
+          for f in *.msi; do
+            [ -e "$f" ] || continue
+            upload "$(basename "$f")" "$f" || true
+          done
+          echo "CNB publish done"
 
   release:
     if: startsWith(github.ref, 'refs/tags/')

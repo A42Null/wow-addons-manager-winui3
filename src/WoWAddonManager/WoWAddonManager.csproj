@@ -24,6 +24,13 @@
     <InformationalVersion>0.4.1</InformationalVersion>
     <AssemblyTitle>魔兽世界插件管理器</AssemblyTitle>
     <Product>WoW Addon Manager</Product>
+    <Company>A42Null</Company>
+    <Authors>A42Null</Authors>
+    <Copyright>Copyright (c) 2026 A42Null</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/A42Null/wow-addons-manager-winui3</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/A42Null/wow-addons-manager-winui3</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
   <ItemGroup>
