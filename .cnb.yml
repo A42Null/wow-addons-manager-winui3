@@ -85,7 +85,8 @@ main:
             if [ -f /tmp/wam.msi ]; then cp /tmp/wam.msi "build/$(basename "$MSI_URL")"; fi
             git add -A build
             git commit -m "artifact: $(date '+%F %T') 来自 GitHub Actions 的构建产物" || echo "无变化"
-            git push origin dist
+            # dist 分支每次基于最新 main 重建，历史不相关，需强制推送
+            git push -f origin dist
             # 回到 main，避免后续 stage 读到旧代码
             git checkout main
 
