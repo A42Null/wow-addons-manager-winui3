@@ -192,7 +192,14 @@ jobs:
                       "/-/releases/${rel_id}/-/assets/upload-url" \
                       "/-/releases/${rel_id}/assets/upload-url" \
                       "/-/releases/${rel_id}/-/upload-url" \
-                      "/-/releases/${rel_id}/-/assets"; do
+                      "/-/releases/${rel_id}/-/assets" \
+                      "/-/releases/${rel_id}/asset-upload-url" \
+                      "/-/releases/${rel_id}/-/asset/upload-url" \
+                      "/-/releases/${rel_id}/-/upload-asset-url" \
+                      "/-/releases/${rel_id}/-/asset-url" \
+                      "/-/releases/${TAG}/-/asset-upload-url" \
+                      "/-/releases/${TAG}/-/assets/upload-url" \
+                      "/-/release-assets/upload-url"; do
               up=$(curl -s -X POST -H "$AUTH" -H "Content-Type: application/json" -H "Accept: application/json" \
                 -d "{\"asset_name\":\"${name}\",\"size\":${size},\"overwrite\":true}" \
                 "${API}${ep}")
